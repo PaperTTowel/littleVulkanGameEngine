@@ -34,4 +34,23 @@ namespace lve{
             gameObject.transform.translation += moveSpeed * dt * glm::normalize(moveDir);
         }
     }
+
+    void CharacterMovementController::moveInPlaneXZ(GLFWwindow* window, float dt, LveGameObject& character) {
+        // 이동 방향 계산
+        float yaw = character.transform.rotation.y;
+        const glm::vec3 forwardDir{sin(yaw), 0.f, cos(yaw)};
+        const glm::vec3 rightDir{forwardDir.z, 0.f, -forwardDir.x};
+        const glm::vec3 upDir{0.f, -1.f, 0.f};
+    
+        glm::vec3 moveDir{0.f};
+        if (glfwGetKey(window, keys.moveForward) == GLFW_PRESS) moveDir += forwardDir;
+        if (glfwGetKey(window, keys.moveBackward) == GLFW_PRESS) moveDir -= forwardDir;
+        if (glfwGetKey(window, keys.moveRight) == GLFW_PRESS) moveDir += rightDir;
+        if (glfwGetKey(window, keys.moveLeft) == GLFW_PRESS) moveDir -= rightDir;
+    
+        if (glm::dot(moveDir, moveDir) > std::numeric_limits<float>::epsilon()) {
+            character.transform.translation += moveSpeed * dt * glm::normalize(moveDir);
+        }
+    }
+    
 } // namespace lve

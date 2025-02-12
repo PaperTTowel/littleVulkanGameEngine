@@ -29,5 +29,7 @@ namespace lve{
         LveDevice &lveDevice;
         std::unique_ptr<LvePipeline> lvePipeline;
         VkPipelineLayout pipelineLayout;
+
+        std::unique_ptr<LveDescriptorSetLayout> renderSystemLayout;
     };
 } // namespace lve

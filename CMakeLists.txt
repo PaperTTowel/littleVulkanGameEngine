@@ -63,6 +63,12 @@ if (NOT TINYOBJ_PATH)
   set(TINYOBJ_PATH external/tinyobjloader)
 endif()
 
+# If STB_PATH not specified in .env.cmake, try fetching from git repo
+if (NOT STB_PATH)
+  message(STATUS "STB_PATH not specified in .env.cmake, using external/stbimage")
+  set(STB_PATH external/stbimage)
+endif()
+
 file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
