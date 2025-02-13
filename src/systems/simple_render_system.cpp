@@ -11,11 +11,14 @@
 #include <cassert>
 #include <stdexcept>
 
+#include <iostream>
+
 namespace lve{
 
     struct SimplePushConstantData{
         glm::mat4 modelMatrix{1.f};
         glm::mat4 normalMatrix{1.f};
+        bool useTexture;
     };
 
     SimpleRenderSystem::SimpleRenderSystem(LveDevice& device, VkRenderPass renderPass, VkDescriptorSetLayout globalSetLayout) : lveDevice{device}{
@@ -115,6 +118,7 @@ namespace lve{
             SimplePushConstantData push{};
             push.modelMatrix = obj.transform.mat4();
             push.normalMatrix = obj.transform.normalMatrix();
+            push.useTexture = obj.enableTexture;
 
             vkCmdPushConstants(
                 frameInfo.commandBuffer,

@@ -40,6 +40,7 @@ namespace lve{
     public:
         using id_t = unsigned int;
         using Map = std::unordered_map<id_t, LveGameObject>;
+        bool enableTexture = true;
 
         LveGameObject(LveGameObject &&) = default;
         LveGameObject(const LveGameObject &) = delete;

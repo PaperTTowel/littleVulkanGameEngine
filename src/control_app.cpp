@@ -150,25 +150,8 @@ namespace lve{
     }
 
     void ControlApp::loadGameObjects(){
-        /*
-        std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/testMap.obj");
-
-        auto gameObj = LveGameObject::createGameObject();
-        gameObj.model = lveModel;
-        gameObj.transform.translation = {-.5f, .5f, 0.f};
-        gameObj.transform.scale = glm::vec3(3.f);
-        gameObjects.emplace(gameObj.getId(), std::move(gameObj));
-
-        lveModel = LveModel::createModelFromFile(lveDevice, "models/character.obj");
-
-        auto characterObj = LveGameObject::createGameObject();
-        characterObj.model = lveModel;
-        characterObj.transform.translation = {-.5f, .5f, 0.f};
-        characterObj.transform.scale = glm::vec3(3.f);
-        characterId = characterObj.getId();
-        gameObjects.emplace(characterId, std::move(characterObj));
-        */
-
+             
+        // 테스트용 모델
         std::shared_ptr<LveModel> lveModel =
             LveModel::createModelFromFile(lveDevice, "models/flat_vase.obj");
         auto &flatVase = gameObjectManager.createGameObject();
@@ -184,13 +167,21 @@ namespace lve{
 
         lveModel = LveModel::createModelFromFile(lveDevice, "models/quad.obj");
         std::shared_ptr<LveTexture> marbleTexture =
-            LveTexture::createTextureFromFile(lveDevice, "../textures/missing.png");
+            LveTexture::createTextureFromFile(lveDevice, "../textures/testTexture.png");
         auto &floor = gameObjectManager.createGameObject();
         floor.model = lveModel;
         floor.diffuseMap = marbleTexture;
         floor.transform.translation = {0.f, .5f, 0.f};
         floor.transform.scale = {3.f, 1.f, 3.f};
 
+        lveModel = LveModel::createModelFromFile(lveDevice, "models/testMap.obj");
+
+        auto& gameObj = gameObjectManager.createGameObject();
+        gameObj.model = lveModel;
+        gameObj.enableTexture = false;
+        gameObj.transform.translation = {-.5f, .5f, 0.f};
+        gameObj.transform.scale = glm::vec3(3.f);
+        
         std::vector<glm::vec3> lightColors{
             {1.f, .1f, .1f},
             {.1f, .1f, 1.f},

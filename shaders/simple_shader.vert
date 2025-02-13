@@ -32,6 +32,7 @@ layout(set = 1, binding = 0) uniform GameObjectBufferData {
 layout(push_constant) uniform Push {
   mat4 modelMatrix;
   mat4 normalMatrix;
+  bool useTexture;
 } push;
 
 void main() {

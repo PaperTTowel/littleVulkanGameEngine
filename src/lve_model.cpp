@@ -145,8 +145,9 @@ void LveModel::Builder::loadModel(const std::string &filepath) {
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
   std::string warn, err;
+  std::string mtlBaseDir = filepath.substr(0, filepath.find_last_of('/') + 1); // MTL 파일 경로
 
-  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.c_str())) {
+  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.c_str(), mtlBaseDir.c_str(), true)) {
     throw std::runtime_error(warn + err);
   }
 
@@ -155,6 +156,7 @@ void LveModel::Builder::loadModel(const std::string &filepath) {
 
   std::unordered_map<Vertex, uint32_t> uniqueVertices{};
   for (const auto &shape : shapes) {
+    auto materialIt = shape.mesh.material_ids.begin();
     for (const auto &index : shape.mesh.indices) {
       Vertex vertex{};
 
@@ -165,11 +167,27 @@ void LveModel::Builder::loadModel(const std::string &filepath) {
             attrib.vertices[3 * index.vertex_index + 2],
         };
 
-        vertex.color = {
+        if (!materials.empty() && materialIt != shape.mesh.material_ids.end() && *materialIt >= 0){
+          int materialIndex = *materialIt;
+
+          vertex.color = {
+              materials[materialIndex].diffuse[0],
+              materials[materialIndex].diffuse[1],
+              materials[materialIndex].diffuse[2],
+          };
+
+          /*
+          if (!material[materialIndex].diffuse_texname.empty()) {
+              textureFilePath = baseDir + material[materialIndex].diffuse_texname;
+          }
+          */
+        } else {
+          vertex.color = {
             attrib.colors[3 * index.vertex_index + 0],
             attrib.colors[3 * index.vertex_index + 1],
             attrib.colors[3 * index.vertex_index + 2],
-        };
+          };
+        }
       }
 
       if (index.normal_index >= 0) {
