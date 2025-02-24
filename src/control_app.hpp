@@ -10,31 +10,31 @@
 #include <memory>
 #include <vector>
 
-namespace lve{
-    class ControlApp{
-    public:
-        static constexpr int WIDTH = 800;
-        static constexpr int HEIGHT = 600;
+namespace lve {
+  class ControlApp {
+  public:
+    static constexpr int WIDTH = 800;
+    static constexpr int HEIGHT = 600;
 
-        ControlApp();
-        ~ControlApp();
+    ControlApp();
+    ~ControlApp();
 
-        ControlApp(const LveWindow &) = delete;
-        ControlApp &operator=(const LveWindow &) = delete;
+    ControlApp(const LveWindow &) = delete;
+    ControlApp &operator=(const LveWindow &) = delete;
 
-        void run();
+    void run();
 
-    private:
-        void loadGameObjects();
+  private:
+    void loadGameObjects();
 
-        LveWindow lveWindow{WIDTH, HEIGHT, "Hello Vulkan!"};
-        LveDevice lveDevice{lveWindow};
-        LveRenderer lveRenderer{lveWindow, lveDevice};
-        
-        std::unique_ptr<LveDescriptorPool> globalPool{};
-        std::vector<std::unique_ptr<LveDescriptorPool>> framePools;
-        LveGameObjectManager gameObjectManager{lveDevice};
+    LveWindow lveWindow{WIDTH, HEIGHT, "Hello Vulkan!"};
+    LveDevice lveDevice{lveWindow};
+    LveRenderer lveRenderer{lveWindow, lveDevice};
 
-        LveGameObject::id_t characterId;
-    };
+    std::unique_ptr<LveDescriptorPool> globalPool{};
+    std::vector<std::unique_ptr<LveDescriptorPool>> framePools;
+    LveGameObjectManager gameObjectManager{lveDevice};
+
+    LveGameObject::id_t characterId;
+  };
 } // namespace lve

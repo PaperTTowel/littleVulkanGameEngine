@@ -26,7 +26,8 @@ layout (set = 1, binding = 1) uniform sampler2D diffuseMap;
 layout(push_constant) uniform Push {
   mat4 modelMatrix;
   mat4 normalMatrix;
-  bool useTexture;
+  int useTexture; // 0 = 꺼짐, 1 = 스프라이트 형식의 텍스쳐(애니메이션 활성화), 2 = 스프라이트 형식이 아닌 텍스쳐
+  int currentFrame;
 } push;
 
 void main() {
@@ -56,10 +57,23 @@ void main() {
     specularLight += intensity * blinnTerm;
   }
 
+  // sprite texture animation
+  vec2 uvOffset = vec2(0.0);
+  float frameWidth = 1.0 / 6.0; // 가로 프레임 개수
+  uvOffset.x = frameWidth * float(push.currentFrame);
+  vec2 animatedUv = fragUv + uvOffset;
+
   vec3 color = fragColor;
-  if (push.useTexture) {
-      color = texture(diffuseMap, fragUv).xyz;
+  // 임시로 오브젝트의 vec3과 텍스쳐의 vec4를 분리해놓음 (이후 통합할 예정)
+  vec4 sampledColor = texture(diffuseMap, animatedUv);
+  if (push.useTexture == 1) {
+    color = sampledColor.xyz;
   }
   
   outColor = vec4(diffuseLight * color + specularLight * fragColor, 1.0);
+
+  // 텍스쳐에 투명도가 있을경우 렌더링을 하지 않음
+  if(sampledColor.a < 0.1){
+    discard;
+  }
 }

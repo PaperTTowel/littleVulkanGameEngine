@@ -121,7 +121,7 @@ void LveTexture::updateDescriptor() {
 
 void LveTexture::createTextureImage(const std::string &filepath) {
   int texWidth, texHeight, texChannels;
-  // stbi_set_flip_vertically_on_load(1);  // todo determine why texture coordinates are flipped
+  stbi_set_flip_vertically_on_load(1);
   stbi_uc *pixels =
       stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
   VkDeviceSize imageSize = texWidth * texHeight * 4;
@@ -223,8 +223,8 @@ void LveTexture::createTextureImageView(VkImageViewType viewType) {
 void LveTexture::createTextureSampler() {
   VkSamplerCreateInfo samplerInfo{};
   samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-  samplerInfo.magFilter = VK_FILTER_LINEAR;
-  samplerInfo.minFilter = VK_FILTER_LINEAR;
+  samplerInfo.magFilter = VK_FILTER_NEAREST; // 텍스쳐 필터(픽셀아트)
+  samplerInfo.minFilter = VK_FILTER_NEAREST;
 
   samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
   samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
