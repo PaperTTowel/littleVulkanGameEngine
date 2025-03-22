@@ -108,11 +108,12 @@ namespace lve {
   LveGameObject::LveGameObject(id_t objId, const LveGameObjectManager &manager)
     : id{objId}, gameObjectManager{manager} {}
 
-  void LveGameObjectManager::updateFrame(int &currentFrame, int maxFrames, float frameTime, float animationSpeed) {
+  // 오브젝트 프레임 업데이트
+  void LveGameObjectManager::updateFrame(LveGameObject &character, int maxFrames, float frameTime, float animationSpeed) {
     static float timeAccumulator = 0.0f;
     timeAccumulator += frameTime;
     if (timeAccumulator >= animationSpeed) {
-      currentFrame = (currentFrame + 1) % maxFrames;
+      character.currentFrame = (character.currentFrame + 1) % maxFrames;
       timeAccumulator = 0.0f;
     }
   }

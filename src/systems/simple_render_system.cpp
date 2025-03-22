@@ -20,6 +20,8 @@ namespace lve {
     glm::mat4 normalMatrix{1.f};
     int useTexture; // 0 = 꺼짐, 1 = 스프라이트 형식의 텍스쳐(애니메이션 활성화), 2 = 스프라이트 형식이 아닌 텍스쳐
     int currentFrame;
+    int objectState;
+    int direction;
   };
 
   SimpleRenderSystem::SimpleRenderSystem(LveDevice &device, VkRenderPass renderPass, VkDescriptorSetLayout globalSetLayout) : lveDevice{device} {
@@ -111,12 +113,15 @@ namespace lve {
         &gameObjectDescriptorSet,
         0,
         nullptr);
-
+      
+      // GLSL로 전달
       SimplePushConstantData push{};
       push.modelMatrix = obj.transform.mat4();
       push.normalMatrix = obj.transform.normalMatrix();
       push.useTexture = obj.enableTextureType;
       push.currentFrame = obj.currentFrame;
+      push.objectState = static_cast<int>(obj.objState);
+      push.direction = static_cast<int>(obj.directions);
 
       vkCmdPushConstants(
         frameInfo.commandBuffer,

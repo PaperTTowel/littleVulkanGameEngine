@@ -43,10 +43,29 @@ namespace lve {
     const glm::vec3 upDir{0.f, -1.f, 0.f};
 
     glm::vec3 moveDir{0.f};
-    if (glfwGetKey(window, keys.moveForward) == GLFW_PRESS) moveDir += forwardDir;
-    if (glfwGetKey(window, keys.moveBackward) == GLFW_PRESS) moveDir -= forwardDir;
-    if (glfwGetKey(window, keys.moveRight) == GLFW_PRESS) moveDir += rightDir;
-    if (glfwGetKey(window, keys.moveLeft) == GLFW_PRESS) moveDir -= rightDir;
+    if (glfwGetKey(window, keys.moveForward) == GLFW_PRESS) {
+      moveDir += forwardDir;
+      character.directions = Direction::UP;
+      character.objState = ObjectState::WALKING;
+    }
+    if (glfwGetKey(window, keys.moveBackward) == GLFW_PRESS) {
+      moveDir -= forwardDir;
+      character.directions = Direction::DOWN;
+      character.objState = ObjectState::WALKING;
+    }
+    if (glfwGetKey(window, keys.moveRight) == GLFW_PRESS) {
+      moveDir += rightDir;
+      character.directions = Direction::RIGHT;
+      character.objState = ObjectState::WALKING;
+    }
+    if (glfwGetKey(window, keys.moveLeft) == GLFW_PRESS) {
+      moveDir -= rightDir;
+      character.directions = Direction::LEFT;
+      character.objState = ObjectState::WALKING;
+    }
+    if (glm::length(moveDir) == 0.f) {
+      character.objState = ObjectState::IDLE;
+    }
 
     if (glm::dot(moveDir, moveDir) > std::numeric_limits<float>::epsilon()) {
       character.transform.translation += moveSpeed * dt * glm::normalize(moveDir);

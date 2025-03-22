@@ -103,7 +103,11 @@ namespace lve {
       // 캐릭터 업데이트
       auto &character = gameObjectManager.gameObjects.at(characterId);
       characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
-      gameObjectManager.updateFrame(character.currentFrame, 6, frameTime, 0.15);
+      gameObjectManager.updateFrame(character, 6, frameTime, 0.15);
+      /* 캐릭터 상태 디버깅용
+      std::cout << "Character state: " << static_cast<int>(character.objState) << '\n';
+      std::cout << "Character dir: " << static_cast<int>(character.directions) << '\n';
+      */
 
       if (auto commandBuffer = lveRenderer.beginFrame()) {
         int frameIndex = lveRenderer.getFrameindex();

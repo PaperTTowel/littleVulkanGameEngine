@@ -28,6 +28,8 @@ layout(push_constant) uniform Push {
   mat4 normalMatrix;
   int useTexture; // 0 = 꺼짐, 1 = 스프라이트 형식의 텍스쳐(애니메이션 활성화), 2 = 스프라이트 형식이 아닌 텍스쳐
   int currentFrame;
+  int objectState;
+  int direction;
 } push;
 
 void main() {
@@ -59,9 +61,17 @@ void main() {
 
   // sprite texture animation
   vec2 uvOffset = vec2(0.0);
-  float frameWidth = 1.0 / 6.0; // 가로 프레임 개수
+  float frameWidth = 1.0 / 6.0; // 기본 가로 프레임 개수
+  if(push.objectState == 1){
+    frameWidth = 1.0;
+  }
+  float frameHeight = 1.0 / 2.0; // 세로 프레임 개수
   uvOffset.x = frameWidth * float(push.currentFrame);
+  uvOffset.y = frameHeight * float(push.objectState);
   vec2 animatedUv = fragUv + uvOffset;
+  if(push.direction == 2) { // 방향이 LEFT일 경우 UV 좌표 반전
+    animatedUv.x = 1.0 - animatedUv.x;
+  }
 
   vec3 color = fragColor;
   // 임시로 오브젝트의 vec3과 텍스쳐의 vec4를 분리해놓음 (이후 통합할 예정)

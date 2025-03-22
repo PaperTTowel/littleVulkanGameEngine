@@ -36,12 +36,16 @@ namespace lve {
 
   class LveGameObjectManager; // forward declare game object manager class
 
+  enum class ObjectState { WALKING, IDLE };
+  enum class Direction { UP, DOWN, LEFT, RIGHT };
   class LveGameObject {
   public:
     using id_t = unsigned int;
     using Map = std::unordered_map<id_t, LveGameObject>;
     int enableTextureType;
     int currentFrame;
+    ObjectState objState = ObjectState::IDLE;
+    Direction directions = Direction::RIGHT;
 
     LveGameObject(LveGameObject &&) = default;
     LveGameObject(const LveGameObject &) = delete;
@@ -95,7 +99,7 @@ namespace lve {
       return uboBuffers[frameIndex]->descriptorInfoForIndex(gameObjectId);
     }
 
-    void updateFrame(int &currentFrame, int maxFrames, float frameTime, float animationSpeed);
+    void updateFrame(LveGameObject &character, int maxFrames, float frameTime, float animationSpeed);
     void updateBuffer(int frameIndex);
 
     LveGameObject::Map gameObjects{};

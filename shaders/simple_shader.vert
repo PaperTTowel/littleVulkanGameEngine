@@ -34,6 +34,8 @@ layout(push_constant) uniform Push {
   mat4 normalMatrix;
   int useTexture;
   int currentFrame;
+  int objectState;
+  int direction;
 } push;
 
 void main() {
