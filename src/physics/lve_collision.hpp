@@ -1,6 +1,7 @@
 #pragma once
 
 // libs
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 // std
 #include <vector>

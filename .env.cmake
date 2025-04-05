@@ -6,7 +6,7 @@ set(VULKAN_SDK_PATH C:/VulkanSDK/1.4.304.1)
 set(MINGW_PATH "C:/msys64/mingw-w64/x86_64-8.1.0-posix-seh-rt_v6-rev0/mingw64")
  
 # Optional set TINYOBJ_PATH to target specific version, otherwise defaults to external/tinyobjloader
-set(TINYOBJ_PATH C:/Dev/2025/Vulkan2dot5Dccp/external/stbimage)
+set(TINYOBJ_PATH C:/Dev/2025/littleVulkanGameEngine/external/stbimage)
 
 # Optional set STB_PATH to target specific version, otherwise defaults to external/stbimage
-set(STB_PATH C:/Dev/2025/Vulkan2dot5Dccp/external/tinyobjloader)
+set(STB_PATH C:/Dev/2025/littleVulkanGameEngine/external/tinyobjloader)
