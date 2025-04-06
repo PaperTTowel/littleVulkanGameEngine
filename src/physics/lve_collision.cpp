@@ -1,35 +1,53 @@
 #include "lve_collision.hpp"
 
+// libs
 #include <glm/gtx/intersect.hpp>
+#include <tiny_obj_loader.h>
+
+// std
+#include <stdexcept>
+#include <iostream>
+
+#ifndef ENGINE_DIR
+#define ENGINE_DIR "../"
+#endif
 
 namespace lve{
-  void LveCollision::setTriangles(const std::vector<Triangle>& triangles){
-    this->triangles = triangles;
-  }
-  // 광선(Ray)과 삼각형 충돌 감지 (Möller–Trumbore 알고리즘)
-  bool LveCollision::rayIntersectsTriangle(const glm::vec3 &rayOrigin, const glm::vec3 &rayDir, float &t) const{
-    for (const auto &tri : triangles){
-      glm::vec3 edge1 = tri.v1 - tri.v0;
-      glm::vec3 edge2 = tri.v2 - tri.v0;
-      glm::vec3 h = glm::cross(rayDir, edge2);
-      float a = glm::dot(edge1, h);
+  std::vector<Triangle> LveCollision::createCollisionFromFile(const std::string &filepath){
+    std::vector<Triangle> triangles;
 
-      if(a > -0.00001f && a < 0.00001f) continue;
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn, err;
+    std::string fullPath = ENGINE_DIR + filepath;
+    std::string baseDir = fullPath.substr(0, fullPath.find_last_of('/') + 1);
 
-      float f = 1.0f / a;
-      glm::vec3 s = rayOrigin - tri.v0;
-      float u = f * glm::dot(s, h);
-      if(u < 0.0f || u > 1.0f) continue;
+    if(!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, fullPath.c_str(), baseDir.c_str(), true)){
+      throw std::runtime_error("TinyObjLoader failed: " + warn + err);
+    }
 
-      glm::vec3 q = glm::cross(s, edge1);
-      float v = f * glm::dot(rayDir, q);
-      if(v < 0.0f || u + v > 1.0f) continue;
+    for(const auto &shape : shapes){
+      const auto &mesh = shape.mesh;
+      for (size_t i = 0; i < mesh.indices.size(); i += 3){
+        Triangle tri;
 
-      t = f * glm::dot(edge2, q);
-      if(t > 0.00001f){
-        return true; // 충돌 발생
+        for (int j = 0; j < 3; ++j){
+          int idx = mesh.indices[i + j].vertex_index;
+          glm::vec3 &vertex = (j == 0) ? tri.v0 : (j == 1) ? tri.v1
+                                                           : tri.v2;
+
+          vertex = {
+              attrib.vertices[3 * idx + 0],
+              attrib.vertices[3 * idx + 1],
+              attrib.vertices[3 * idx + 2]};
+        }
+
+        triangles.push_back(tri);
       }
     }
-    return false; // 충돌 없음
+
+    std::cout << "Loaded " << triangles.size() << " triangles from " << filepath << std::endl;
+    return triangles;
   }
 }

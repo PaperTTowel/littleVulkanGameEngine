@@ -18,6 +18,15 @@
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
+#include <glm/gtx/string_cast.hpp>
+
+// 충돌확인 디버깅용
+struct RayHitDebugInfo {
+  std::string directionName;
+  glm::vec3 direction;
+  bool hit;
+  glm::vec3 hitPoint;
+};
 
 namespace lve {
 
@@ -110,6 +119,43 @@ namespace lve {
       characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
       gameObjectManager.updateFrame(character, 6, frameTime, 0.15);
 
+      
+      // 충돌판정 업데이트
+      glm::vec3 charPos = character.transform.translation;
+      glm::vec3 charScale = character.transform.scale;
+      
+      std::vector<RayHitDebugInfo> debugRays = {
+          {"Right (+X)",  {1.f, 0.f, 0.f}, false, {}},
+          {"Left (-X)",   {-1.f, 0.f, 0.f}, false, {}},
+          {"Down (-Y)",   {0.f, -1.f, 0.f}, false, {}},
+          {"Up (+Y)",     {0.f, 1.f, 0.f}, false, {}},
+          {"Forward (+Z)",{0.f, 0.f, 1.f}, false, {}},
+          {"Back (-Z)",   {0.f, 0.f, -1.f}, false, {}},
+      };
+      
+      for (auto& info : debugRays) {
+          ray.origin = charPos;
+          ray.direction = glm::normalize(info.direction);
+      
+          auto hit = collisionSystem.raycast(ray, 1.0f); // 필요에 따라 거리 조정
+          if (hit) {
+              info.hit = true;
+              info.hitPoint = hit->point;
+          }
+      }
+      
+      // 최종 디버깅 출력
+      std::cout << "=== Collision Debug Info ===" << std::endl;
+      std::cout << "Character Pos: " << glm::to_string(charPos) << std::endl;
+      
+      for (const auto& info : debugRays) {
+          std::cout << info.directionName << ": "
+                    << (info.hit ? "HIT at " + glm::to_string(info.hitPoint) : "No Hit")
+                    << std::endl;
+      }
+      std::cout << "=============================" << std::endl;
+
+
       // 카메라가 부드럽게 캐릭터를 따라가도록 지정
       glm::vec3 targetPos = character.transform.translation + glm::vec3(-2.0f, -2.0f, 0.8f);
       viewerObject.transform.translation = glm::mix(viewerObject.transform.translation, targetPos, 0.1f);
@@ -156,38 +202,21 @@ namespace lve {
 
   void ControlApp::loadGameObjects() {
 
-    /* 테스트용 모델
-    std::shared_ptr<LveModel> lveModel =
-        LveModel::createModelFromFile(lveDevice, "models/flat_vase.obj");
-    auto &flatVase = gameObjectManager.createGameObject();
-    flatVase.model = lveModel;
-    flatVase.transform.translation = {-.5f, .5f, 0.f};
-    flatVase.transform.scale = {3.f, 1.5f, 3.f};
-
-    lveModel = LveModel::createModelFromFile(lveDevice, "models/smooth_vase.obj");
-    auto &smoothVase = gameObjectManager.createGameObject();
-    smoothVase.model = lveModel;
-    smoothVase.transform.translation = {.5f, .5f, 0.f};
-    smoothVase.transform.scale = {3.f, 1.5f, 3.f};
-
-
-    lveModel = LveModel::createModelFromFile(lveDevice, "models/quad.obj");
-    std::shared_ptr<LveTexture> marbleTexture =
-        LveTexture::createTextureFromFile(lveDevice, "../textures/testTexture.png");
-    auto &floor = gameObjectManager.createGameObject();
-    floor.model = lveModel;
-    floor.diffuseMap = marbleTexture;
-    floor.transform.translation = {0.f, .5f, 0.f};
-    floor.transform.scale = {3.f, 1.f, 3.f};
-    */
-
     std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/testMap.obj");
+    auto mapTris = LveCollision::createCollisionFromFile("models/testMap.obj");
 
     auto &gameObj = gameObjectManager.createGameObject();
     gameObj.model = lveModel;
     gameObj.enableTextureType = 0;
     gameObj.transform.translation = {-.5f, .5f, 0.f};
     gameObj.transform.scale = glm::vec3(3.f);
+
+    for (auto &tri : mapTris) {
+        tri.v0 = tri.v0 * gameObj.transform.scale + gameObj.transform.translation;
+        tri.v1 = tri.v1 * gameObj.transform.scale + gameObj.transform.translation;
+        tri.v2 = tri.v2 * gameObj.transform.scale + gameObj.transform.translation;
+    }
+    collisionSystem.setMapTriangles(mapTris);
 
     lveModel = LveModel::createModelFromFile(lveDevice, "models/character.obj");
     std::shared_ptr<LveTexture> marbleTexture =

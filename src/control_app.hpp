@@ -5,6 +5,7 @@
 #include "lve_device.hpp"
 #include "lve_renderer.hpp"
 #include "lve_descriptors.hpp"
+#include "physics/lve_collisionSystem.hpp"
 
 // std
 #include <memory>
@@ -34,6 +35,9 @@ namespace lve {
     std::unique_ptr<LveDescriptorPool> globalPool{};
     std::vector<std::unique_ptr<LveDescriptorPool>> framePools;
     LveGameObjectManager gameObjectManager{lveDevice};
+
+    CollisionSystem collisionSystem;
+    Ray ray;
 
     LveGameObject::id_t characterId;
   };

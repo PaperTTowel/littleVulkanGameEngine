@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 // std
 #include <vector>
+#include <string>
 
 namespace lve{
   struct Triangle{ glm::vec3 v0, v1, v2; };
@@ -14,6 +15,8 @@ namespace lve{
     void setTriangles(const std::vector<Triangle>& triangless);
 
     bool rayIntersectsTriangle(const glm::vec3& rayOrigin, const glm::vec3& rayDir, float& t) const;
+
+    static std::vector<Triangle> createCollisionFromFile(const std::string& filepath);
 
     private:
     std::vector<Triangle> triangles; // 충돌 감지용 삼각형 리스트
