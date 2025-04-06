@@ -118,7 +118,6 @@ namespace lve {
       auto &character = gameObjectManager.gameObjects.at(characterId);
       characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
       gameObjectManager.updateFrame(character, 6, frameTime, 0.15);
-
       
       // 충돌판정 업데이트
       glm::vec3 charPos = character.transform.translation;
@@ -155,9 +154,8 @@ namespace lve {
       }
       std::cout << "=============================" << std::endl;
 
-
       // 카메라가 부드럽게 캐릭터를 따라가도록 지정
-      glm::vec3 targetPos = character.transform.translation + glm::vec3(-2.0f, -2.0f, 0.8f);
+      glm::vec3 targetPos = character.transform.translation + glm::vec3(-3.0f, -2.0f, .0f);
       viewerObject.transform.translation = glm::mix(viewerObject.transform.translation, targetPos, 0.1f);
 
       if (auto commandBuffer = lveRenderer.beginFrame()) {
@@ -202,23 +200,24 @@ namespace lve {
 
   void ControlApp::loadGameObjects() {
 
-    std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/testMap.obj");
-    auto mapTris = LveCollision::createCollisionFromFile("models/testMap.obj");
+    // std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/testMap.obj");
+    auto modelWithCollision = LveModel::createModelWithCollision(lveDevice, "models/testMap.obj");
 
     auto &gameObj = gameObjectManager.createGameObject();
-    gameObj.model = lveModel;
+    gameObj.model = std::move(modelWithCollision.model);
     gameObj.enableTextureType = 0;
     gameObj.transform.translation = {-.5f, .5f, 0.f};
     gameObj.transform.scale = glm::vec3(3.f);
 
-    for (auto &tri : mapTris) {
-        tri.v0 = tri.v0 * gameObj.transform.scale + gameObj.transform.translation;
-        tri.v1 = tri.v1 * gameObj.transform.scale + gameObj.transform.translation;
-        tri.v2 = tri.v2 * gameObj.transform.scale + gameObj.transform.translation;
+    // 충돌 삼각형 좌표도 트랜스폼 적용 후 충돌 시스템에 전달
+    for (auto &tri : modelWithCollision.collisionTriangles) {
+      tri.v0 = glm::vec3(gameObj.transform.mat4() * glm::vec4(tri.v0, 1.0f));
+      tri.v1 = glm::vec3(gameObj.transform.mat4() * glm::vec4(tri.v1, 1.0f));
+      tri.v2 = glm::vec3(gameObj.transform.mat4() * glm::vec4(tri.v2, 1.0f));
     }
-    collisionSystem.setMapTriangles(mapTris);
+    collisionSystem.setMapTriangles(std::move(modelWithCollision.collisionTriangles));
 
-    lveModel = LveModel::createModelFromFile(lveDevice, "models/character.obj");
+    std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/character.obj");
     std::shared_ptr<LveTexture> marbleTexture =
       LveTexture::createTextureFromFile(lveDevice, "../textures/cp.png");
 

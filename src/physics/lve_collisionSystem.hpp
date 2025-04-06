@@ -1,8 +1,10 @@
 #pragma once
 
-#include "lve_collision.hpp"
-
+// libs
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/glm.hpp>
 // std
+#include <vector>
 #include <optional>
 
 struct Ray {
@@ -17,6 +19,8 @@ struct RaycastHit {
 };
 
 namespace lve{
+  struct Triangle{ glm::vec3 v0, v1, v2; };
+  
   class CollisionSystem{
     public:
     void setMapTriangles(const std::vector<Triangle>& tris);
