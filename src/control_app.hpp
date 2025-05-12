@@ -5,7 +5,7 @@
 #include "lve_device.hpp"
 #include "lve_renderer.hpp"
 #include "lve_descriptors.hpp"
-#include "physics/lve_collisionSystem.hpp"
+#include "physics/collisionSystem.hpp"
 
 // std
 #include <memory>

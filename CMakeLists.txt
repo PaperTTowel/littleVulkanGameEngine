@@ -1,6 +1,5 @@
-include(./.env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
-message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
-set(CMAKE_GENERATOR "MSYS Makefiles")
+include(./.env.Unix.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
+message(STATUS "Local .env.Unix.cmake: ${LOCAL_ENV}")
 
 cmake_minimum_required(VERSION 3.11.0)
 
@@ -8,8 +7,8 @@ set(NAME LveEngine)
 
 message(STATUS "using ${CMAKE_GENERATOR}")
 if (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
-    if (NOT MINGW_PATH) 
-      message(FATAL_ERROR "MINGW_PATH not set in .env.cmake")
+    if (NOT MINGW_PATH)
+      message(FATAL_ERROR "MINGW_PATH not set in .env.Unix.cmake")
     endif()
     set(USE_MINGW "True")
     set(CMAKE_C_COMPILER ${MINGW_PATH}/bin/gcc.exe)
@@ -40,9 +39,9 @@ if (DEFINED GLFW_PATH)
   set(GLFW_INCLUDE_DIRS "${GLFW_PATH}/include")
   if (MSVC)
     set(GLFW_LIB "${GLFW_PATH}/lib-vc2019") # 2.1 Update lib-vc2019 to use same version as your visual studio
-  elseif (CMAKE_GENERATOR STREQUAL "MSYS Makefiles")
-    message(STATUS "USING MSYS2 UCRT64")
-    set(GLFW_LIB "${GLFW_PATH}/include") # 2.1 make sure matches glfw mingw subdirectory
+  elseif (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
+    message(STATUS "USING MINGW")
+    set(GLFW_LIB "${GLFW_PATH}/lib-mingw-w64") # 2.1 make sure matches glfw mingw subdirectory
   endif()
 else()
   find_package(glfw3 3.3 REQUIRED)
@@ -59,13 +58,13 @@ include_directories(external)
 
 # If TINYOBJ_PATH not specified in .env.cmake, try fetching from git repo
 if (NOT TINYOBJ_PATH)
-  message(STATUS "TINYOBJ_PATH not specified in .env.cmake, using external/tinyobjloader")
+  message(STATUS "TINYOBJ_PATH not specified in .env.Unix.cmake, using external/tinyobjloader")
   set(TINYOBJ_PATH external/tinyobjloader)
 endif()
 
 # If STB_PATH not specified in .env.cmake, try fetching from git repo
 if (NOT STB_PATH)
-  message(STATUS "STB_PATH not specified in .env.cmake, using external/stbimage")
+  message(STATUS "STB_PATH not specified in .env.Unix.cmake, using external/stbimage")
   set(STB_PATH external/stbimage)
 endif()
 
@@ -73,8 +72,7 @@ file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-# target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
-set(CMAKE_CXX_STANDARD 17)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
 
@@ -121,13 +119,13 @@ endif()
 # Find all vertex and fragment sources within shaders directory
 # taken from VBlancos vulkan tutorial
 # https://github.com/vblanco20-1/vulkan-guide/blob/all-chapters/CMakeLists.txt
-find_program(GLSL_VALIDATOR glslangValidator HINTS 
-  ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE} 
-  /usr/bin 
-  /usr/local/bin 
+find_program(GLSL_VALIDATOR glslangValidator HINTS
+  ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}
+  /usr/bin
+  /usr/local/bin
   ${VULKAN_SDK_PATH}/Bin
   ${VULKAN_SDK_PATH}/Bin32
-  $ENV{VULKAN_SDK}/Bin/ 
+  $ENV{VULKAN_SDK}/Bin/
   $ENV{VULKAN_SDK}/Bin32/
 )
 

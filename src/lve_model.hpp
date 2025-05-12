@@ -2,7 +2,7 @@
 
 #include "lve_buffer.hpp"
 #include "lve_device.hpp"
-#include "physics/lve_collisionSystem.hpp"
+#include "physics/collisionSystem.hpp"
 
 // libs
 #define GLM_FORCE_RADIANS
