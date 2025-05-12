@@ -36,6 +36,7 @@ Vulkan을 이용하여 나만의 작은 게임엔진을 개발하는 프로젝�
  + Msys2 UCRT64 패키지
    - cmake 3.31.5-1
    - make 4.4.1-2
+---
 
 + Fedora 42 KDE
 
