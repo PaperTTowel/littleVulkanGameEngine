@@ -18,15 +18,6 @@
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
-#include <glm/gtx/string_cast.hpp>
-
-// 충돌확인 디버깅용
-struct RayHitDebugInfo {
-  std::string directionName;
-  glm::vec3 direction;
-  bool hit;
-  glm::vec3 hitPoint;
-};
 
 namespace lve {
 
@@ -118,41 +109,6 @@ namespace lve {
       auto &character = gameObjectManager.gameObjects.at(characterId);
       characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
       gameObjectManager.updateFrame(character, 6, frameTime, 0.15);
-      
-      // 충돌판정 업데이트
-      glm::vec3 charPos = character.transform.translation;
-      glm::vec3 charScale = character.transform.scale;
-      
-      std::vector<RayHitDebugInfo> debugRays = {
-          {"Right (+X)",  {1.f, 0.f, 0.f}, false, {}},
-          {"Left (-X)",   {-1.f, 0.f, 0.f}, false, {}},
-          {"Down (-Y)",   {0.f, -1.f, 0.f}, false, {}},
-          {"Up (+Y)",     {0.f, 1.f, 0.f}, false, {}},
-          {"Forward (+Z)",{0.f, 0.f, 1.f}, false, {}},
-          {"Back (-Z)",   {0.f, 0.f, -1.f}, false, {}},
-      };
-      
-      for (auto& info : debugRays) {
-          ray.origin = charPos;
-          ray.direction = glm::normalize(info.direction);
-      
-          auto hit = collisionSystem.raycast(ray, 1.0f); // 필요에 따라 거리 조정
-          if (hit) {
-              info.hit = true;
-              info.hitPoint = hit->point;
-          }
-      }
-      
-      // 최종 디버깅 출력
-      std::cout << "=== Collision Debug Info ===" << std::endl;
-      std::cout << "Character Pos: " << glm::to_string(charPos) << std::endl;
-      
-      for (const auto& info : debugRays) {
-          std::cout << info.directionName << ": "
-                    << (info.hit ? "HIT at " + glm::to_string(info.hitPoint) : "No Hit")
-                    << std::endl;
-      }
-      std::cout << "=============================" << std::endl;
 
       // 카메라가 부드럽게 캐릭터를 따라가도록 지정
       glm::vec3 targetPos = character.transform.translation + glm::vec3(-3.0f, -2.0f, .0f);
@@ -200,24 +156,15 @@ namespace lve {
 
   void ControlApp::loadGameObjects() {
 
-    // std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/testMap.obj");
-    auto modelWithCollision = LveModel::createModelWithCollision(lveDevice, "models/testMap.obj");
+    std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/testMap.obj");
 
     auto &gameObj = gameObjectManager.createGameObject();
-    gameObj.model = std::move(modelWithCollision.model);
+    gameObj.model = lveModel;
     gameObj.enableTextureType = 0;
     gameObj.transform.translation = {-.5f, .5f, 0.f};
     gameObj.transform.scale = glm::vec3(3.f);
 
-    // 충돌 삼각형 좌표도 트랜스폼 적용 후 충돌 시스템에 전달
-    for (auto &tri : modelWithCollision.collisionTriangles) {
-      tri.v0 = glm::vec3(gameObj.transform.mat4() * glm::vec4(tri.v0, 1.0f));
-      tri.v1 = glm::vec3(gameObj.transform.mat4() * glm::vec4(tri.v1, 1.0f));
-      tri.v2 = glm::vec3(gameObj.transform.mat4() * glm::vec4(tri.v2, 1.0f));
-    }
-    collisionSystem.setMapTriangles(std::move(modelWithCollision.collisionTriangles));
-
-    std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/character.obj");
+    lveModel = LveModel::createModelFromFile(lveDevice, "models/character.obj");
     std::shared_ptr<LveTexture> marbleTexture =
       LveTexture::createTextureFromFile(lveDevice, "../textures/cp.png");
 

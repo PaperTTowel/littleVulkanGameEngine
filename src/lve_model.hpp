@@ -2,7 +2,6 @@
 
 #include "lve_buffer.hpp"
 #include "lve_device.hpp"
-#include "physics/collisionSystem.hpp"
 
 // libs
 #define GLM_FORCE_RADIANS
@@ -37,11 +36,6 @@ namespace lve{
       void loadModel(const std::string &filepath);
     };
 
-    struct ModelWithCollision {
-      std::unique_ptr<LveModel> model;
-      std::vector<Triangle> collisionTriangles;
-    };
-
     LveModel(LveDevice &device, const LveModel::Builder &builder);
     ~LveModel();
 
@@ -49,7 +43,6 @@ namespace lve{
     LveModel &operator=(const LveModel &) = delete;
 
     static std::unique_ptr<LveModel> createModelFromFile(LveDevice &device, const std::string &filepath);
-    static ModelWithCollision createModelWithCollision(LveDevice &device, const std::string &filepath);
 
     void bind(VkCommandBuffer commandBuffer);
     void draw(VkCommandBuffer commandBuffer);

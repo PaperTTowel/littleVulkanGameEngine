@@ -54,6 +54,36 @@ else()
 	message(STATUS "Using glfw lib at: ${GLFW_LIB}")
 endif()
 
+# 3. Set BULLET_SDK_PATH in .env.cmake to target specific bullet installation
+if (DEFINED BULLET_SDK_PATH)
+  set(Bullet_INCLUDE_DIRS "${BULLET_SDK_PATH}/include/bullet")
+  set(Bullet_LIBRARIES
+    "${BULLET_SDK_PATH}/lib/libBulletDynamics.so"
+    "${BULLET_SDK_PATH}/lib/libBulletCollision.so"
+    "${BULLET_SDK_PATH}/lib/libLinearMath.so"
+  )
+  set(Bullet_FOUND "True")
+else()
+  find_path(Bullet_INCLUDE_DIRS btBulletDynamicsCommon.h PATH_SUFFIXES bullet)
+  find_library(BulletDynamics_LIB BulletDynamics)
+  find_library(BulletCollision_LIB BulletCollision)
+  find_library(LinearMath_LIB LinearMath)
+
+  if (Bullet_INCLUDE_DIRS AND BulletDynamics_LIB AND BulletCollision_LIB AND LinearMath_LIB)
+    set(Bullet_LIBRARIES ${BulletDynamics_LIB} ${BulletCollision_LIB} ${LinearMath_LIB})
+    set(Bullet_FOUND "True")
+  else()
+    set(Bullet_FOUND "False")
+  endif()
+endif()
+
+if (NOT Bullet_FOUND)
+  message(FATAL_ERROR "Could not find Bullet physics library!")
+else()
+  message(STATUS "Using Bullet includes: ${Bullet_INCLUDE_DIRS}")
+  message(STATUS "Using Bullet libs: ${Bullet_LIBRARIES}")
+endif()
+
 include_directories(external)
 
 # If TINYOBJ_PATH not specified in .env.cmake, try fetching from git repo
@@ -95,11 +125,13 @@ if (WIN32)
     ${STB_PATH}
     ${GLFW_INCLUDE_DIRS}
     ${GLM_PATH}
+    ${Bullet_INCLUDE_DIRS}
     )
 
   target_link_directories(${PROJECT_NAME} PUBLIC
     ${Vulkan_LIBRARIES}
     ${GLFW_LIB}
+    ${Bullet_LIBRARIES}
   )
 
   target_link_libraries(${PROJECT_NAME} glfw3 vulkan-1)
@@ -109,8 +141,13 @@ elseif (UNIX)
       ${PROJECT_SOURCE_DIR}/src
       ${TINYOBJ_PATH}
       ${STB_PATH}
+      ${Bullet_INCLUDE_DIRS}
     )
-    target_link_libraries(${PROJECT_NAME} glfw ${Vulkan_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME}
+      glfw
+      ${Vulkan_LIBRARIES}
+      ${Bullet_LIBRARIES}
+    )
 endif()
 
 

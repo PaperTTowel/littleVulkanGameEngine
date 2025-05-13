@@ -44,27 +44,6 @@ namespace lve {
     return std::make_unique<LveModel>(device, builder);
   }
 
-  LveModel::ModelWithCollision LveModel::createModelWithCollision(
-    LveDevice &device, const std::string &filepath
-  ){
-    LveModel::Builder builder{};
-    builder.loadModel(ENGINE_DIR + filepath); // 렌더링용
-    
-    std::vector<Triangle> triangles;
-    for(size_t i = 0; i < builder.indices.size(); i += 3){
-      Triangle tri;
-      tri.v0 = builder.vertices[builder.indices[i + 0]].position;
-      tri.v1 = builder.vertices[builder.indices[i + 1]].position;
-      tri.v2 = builder.vertices[builder.indices[i + 2]].position;
-      triangles.push_back(tri);
-    }
-
-    LveModel::ModelWithCollision result;
-    result.model = std::make_unique<LveModel>(device, builder);
-    result.collisionTriangles = std::move(triangles);
-    return result;
-  }
-
   void LveModel::createVertexBuffers(const std::vector<Vertex> &vertices) {
     vertexCount = static_cast<uint32_t>(vertices.size());
     assert(vertexCount >= 3 && "Vertex count must be at least 3");
