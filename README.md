@@ -42,16 +42,22 @@ Vulkan을 이용하여 나만의 작은 게임엔진을 개발하는 프로젝�
 
 
     다음 명령어를 통해 필요한 저장소를 설치하십시오.
+  + 개발 도구 키트 (gcc 미포함)
   ```
   dnf install @development-tools
   ```
+  + glm, glfw
   ```
   dnf install glm-devel glfw-devel
   ```
 
-
+  + Vulkan API (셰이더 컴파일 추가)
   ```
   dnf install vulkan-devel vulkan-validation-layers
+  ```
+  + 물리엔진
+  ```
+  dnf install bullet-devel
   ```
   
 ## Credits
