@@ -3,6 +3,7 @@
 #include "lve_model.hpp"
 #include "lve_swap_chain.hpp"
 #include "lve_texture.hpp"
+#include "physics/physics_engine.hpp"
 
 // libs
 #include <glm/gtc/matrix_transform.hpp>
@@ -46,6 +47,8 @@ namespace lve {
     int currentFrame;
     ObjectState objState = ObjectState::IDLE;
     Direction directions = Direction::RIGHT;
+
+    bool hasPhysics = false;
 
     LveGameObject(LveGameObject &&) = default;
     LveGameObject(const LveGameObject &) = delete;
@@ -104,6 +107,8 @@ namespace lve {
 
     LveGameObject::Map gameObjects{};
     std::vector<std::unique_ptr<LveBuffer>> uboBuffers{LveSwapChain::MAX_FRAMES_IN_FLIGHT};
+
+    std::unique_ptr<PhysicsEngine> physicsEngine;
 
   private:
     LveGameObject::id_t currentId = 0;

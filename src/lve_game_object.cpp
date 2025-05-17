@@ -69,7 +69,7 @@ namespace lve {
     return gameObj;
   }
 
-  LveGameObjectManager::LveGameObjectManager(LveDevice &device) {
+  LveGameObjectManager::LveGameObjectManager(LveDevice &device) : physicsEngine{std::make_unique<PhysicsEngine>()} {
     // including nonCoherentAtomSize allows us to flush a specific index at once
     int alignment = std::lcm(
       device.properties.limits.nonCoherentAtomSize,

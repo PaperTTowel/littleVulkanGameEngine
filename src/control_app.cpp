@@ -82,8 +82,12 @@ namespace lve {
 
     auto &viewerObject = gameObjectManager.createGameObject();
     viewerObject.transform.translation.z = -2.5f;
-    KeyboardMovementController cameraController{};
+    // 개발자모드 전용 (자유로운 카메라 움직임)
+    // KeyboardMovementController cameraController{};
     CharacterMovementController characterController{};
+    // 캐릭터랑 카메라의 오프셋 위치 (카메라 초기값)
+    viewerObject.transform.rotation.y += 1.575f;
+    viewerObject.transform.rotation.x -= 0.4f;
 
     auto currentTime = std::chrono::high_resolution_clock::now();
 
@@ -93,8 +97,9 @@ namespace lve {
       auto newTime = std::chrono::high_resolution_clock::now();
       float frameTime = std::chrono::duration<float, std::chrono::seconds::period>(newTime - currentTime).count();
       currentTime = newTime;
-
-      cameraController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, viewerObject);
+      
+      // 개발자모드 전용 (자유로운 카메라 움직임)
+      // cameraController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, viewerObject);
       camera.setViewYXZ(viewerObject.transform.translation, viewerObject.transform.rotation);
 
       float aspect = lveRenderer.getAspectRatio();
@@ -104,10 +109,10 @@ namespace lve {
       auto &character = gameObjectManager.gameObjects.at(characterId);
       characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
       gameObjectManager.updateFrame(character, 6, frameTime, 0.15);
-      /* 캐릭터 상태 디버깅용
-      std::cout << "Character state: " << static_cast<int>(character.objState) << '\n';
-      std::cout << "Character dir: " << static_cast<int>(character.directions) << '\n';
-      */
+
+      // 카메라가 부드럽게 캐릭터를 따라가도록 지정
+      glm::vec3 targetPos = character.transform.translation + glm::vec3(-3.0f, -2.0f, .0f);
+      viewerObject.transform.translation = glm::mix(viewerObject.transform.translation, targetPos, 0.1f);
 
       if (auto commandBuffer = lveRenderer.beginFrame()) {
         int frameIndex = lveRenderer.getFrameindex();
@@ -130,6 +135,15 @@ namespace lve {
         uboBuffers[frameIndex]->writeToBuffer(&ubo);
         uboBuffers[frameIndex]->flush();
 
+        // update physics engine
+        std::vector<LveGameObject*> objPtrs;
+        objPtrs.reserve(gameObjectManager.gameObjects.size());
+        for (auto& [id, obj] : gameObjectManager.gameObjects) {
+            objPtrs.push_back(&obj);
+        }
+        gameObjectManager.physicsEngine->stepSimulation(frameIndex);
+        gameObjectManager.physicsEngine->syncTransforms(objPtrs);
+
         // final step of update is updating the game objects buffer data
         // The render functions MUST not change a game objects transform data
         gameObjectManager.updateBuffer(frameIndex);
@@ -151,31 +165,6 @@ namespace lve {
 
   void ControlApp::loadGameObjects() {
 
-    /* 테스트용 모델
-    std::shared_ptr<LveModel> lveModel =
-        LveModel::createModelFromFile(lveDevice, "models/flat_vase.obj");
-    auto &flatVase = gameObjectManager.createGameObject();
-    flatVase.model = lveModel;
-    flatVase.transform.translation = {-.5f, .5f, 0.f};
-    flatVase.transform.scale = {3.f, 1.5f, 3.f};
-
-    lveModel = LveModel::createModelFromFile(lveDevice, "models/smooth_vase.obj");
-    auto &smoothVase = gameObjectManager.createGameObject();
-    smoothVase.model = lveModel;
-    smoothVase.transform.translation = {.5f, .5f, 0.f};
-    smoothVase.transform.scale = {3.f, 1.5f, 3.f};
-
-
-    lveModel = LveModel::createModelFromFile(lveDevice, "models/quad.obj");
-    std::shared_ptr<LveTexture> marbleTexture =
-        LveTexture::createTextureFromFile(lveDevice, "../textures/testTexture.png");
-    auto &floor = gameObjectManager.createGameObject();
-    floor.model = lveModel;
-    floor.diffuseMap = marbleTexture;
-    floor.transform.translation = {0.f, .5f, 0.f};
-    floor.transform.scale = {3.f, 1.f, 3.f};
-    */
-
     std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/testMap.obj");
 
     auto &gameObj = gameObjectManager.createGameObject();
@@ -183,6 +172,8 @@ namespace lve {
     gameObj.enableTextureType = 0;
     gameObj.transform.translation = {-.5f, .5f, 0.f};
     gameObj.transform.scale = glm::vec3(3.f);
+
+    gameObjectManager.physicsEngine->addBoxRigidBody(gameObj, .0f);
 
     lveModel = LveModel::createModelFromFile(lveDevice, "models/character.obj");
     std::shared_ptr<LveTexture> marbleTexture =

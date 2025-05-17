@@ -1,5 +1,6 @@
 /.vscode
 /build
+/buildForLinux
 
 # 컴파일된 셰이더파일 제외
 /shaders/컴파일.txt
