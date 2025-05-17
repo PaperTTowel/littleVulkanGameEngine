@@ -135,6 +135,15 @@ namespace lve {
         uboBuffers[frameIndex]->writeToBuffer(&ubo);
         uboBuffers[frameIndex]->flush();
 
+        // update physics engine
+        std::vector<LveGameObject*> objPtrs;
+        objPtrs.reserve(gameObjectManager.gameObjects.size());
+        for (auto& [id, obj] : gameObjectManager.gameObjects) {
+            objPtrs.push_back(&obj);
+        }
+        gameObjectManager.physicsEngine->stepSimulation(frameIndex);
+        gameObjectManager.physicsEngine->syncTransforms(objPtrs);
+
         // final step of update is updating the game objects buffer data
         // The render functions MUST not change a game objects transform data
         gameObjectManager.updateBuffer(frameIndex);
@@ -163,6 +172,8 @@ namespace lve {
     gameObj.enableTextureType = 0;
     gameObj.transform.translation = {-.5f, .5f, 0.f};
     gameObj.transform.scale = glm::vec3(3.f);
+
+    gameObjectManager.physicsEngine->addBoxRigidBody(gameObj, .0f);
 
     lveModel = LveModel::createModelFromFile(lveDevice, "models/character.obj");
     std::shared_ptr<LveTexture> marbleTexture =

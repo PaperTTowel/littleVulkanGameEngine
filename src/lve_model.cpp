@@ -33,6 +33,7 @@ namespace lve {
   LveModel::LveModel(LveDevice &device, const LveModel::Builder &builder) : lveDevice{device} {
     createVertexBuffers(builder.vertices);
     createIndexBuffers(builder.indices);
+    calculateBoundingBox(builder.vertices);
   }
 
   LveModel::~LveModel() {}
@@ -119,6 +120,19 @@ namespace lve {
     if (hasIndexBuffer) {
       vkCmdBindIndexBuffer(commandBuffer, indexBuffer->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
     }
+  }
+
+  void LveModel::calculateBoundingBox(const std::vector<Vertex>& vertices) {
+    glm::vec3 min(std::numeric_limits<float>::max());
+    glm::vec3 max(std::numeric_limits<float>::lowest());
+
+    for (const auto& vertex : vertices) {
+      min = glm::min(min, vertex.position);
+      max = glm::max(max, vertex.position);
+    }
+
+    boundingBox.min = min;
+    boundingBox.max = max;
   }
 
   std::vector<VkVertexInputBindingDescription> LveModel::Vertex::getBindingDescriptions() {

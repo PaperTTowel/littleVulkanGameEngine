@@ -47,9 +47,22 @@ namespace lve{
     void bind(VkCommandBuffer commandBuffer);
     void draw(VkCommandBuffer commandBuffer);
 
+    // physics_engine.cpp에서 충돌 크기를 사용하기 위해 사용
+    struct BoundingBox {
+      glm::vec3 min;
+      glm::vec3 max;
+
+      glm::vec3 center() const { return (min + max) * 0.5f; }
+      glm::vec3 halfSize() const { return (max - min) * 0.5f; }
+    };
+
+    const BoundingBox& getBoundingBox() const { return boundingBox; }
+
   private:
     void createVertexBuffers(const std::vector<Vertex> &vertices);
     void createIndexBuffers(const std::vector<uint32_t> &indices);
+
+    void calculateBoundingBox(const std::vector<Vertex>& vertices);
 
     LveDevice &lveDevice;
 
@@ -59,5 +72,7 @@ namespace lve{
     bool hasIndexBuffer = false;
     std::unique_ptr<LveBuffer> indexBuffer;
     uint32_t indexCount;
+
+    BoundingBox boundingBox;
   };
 } // namespace lve
