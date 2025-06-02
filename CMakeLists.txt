@@ -1,5 +1,11 @@
-include(./.env.Unix.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
-message(STATUS "Local .env.Unix.cmake: ${LOCAL_ENV}")
+if(WIN32)
+  include(./.env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
+  message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
+  set(CMAKE_GENERATOR "MSYS Makefiles")
+elseif(UNIX)
+  include(./.env.UNIX.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
+  message(STATUS "Local .env.UNIX.cmake: ${LOCAL_ENV}")
+endif()
 
 cmake_minimum_required(VERSION 3.11.0)
 
@@ -7,12 +13,12 @@ set(NAME LveEngine)
 
 message(STATUS "using ${CMAKE_GENERATOR}")
 if (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
-    if (NOT MINGW_PATH)
-      message(FATAL_ERROR "MINGW_PATH not set in .env.Unix.cmake")
-    endif()
-    set(USE_MINGW "True")
-    set(CMAKE_C_COMPILER ${MINGW_PATH}/bin/gcc.exe)
-    set(CMAKE_CXX_COMPILER  ${MINGW_PATH}/bin/g++.exe)
+  if (NOT MINGW_PATH)
+    message(FATAL_ERROR "MINGW_PATH not set in .env.Unix.cmake")
+  endif()
+  set(USE_MINGW "True")
+  set(CMAKE_C_COMPILER ${MINGW_PATH}/bin/gcc.exe)
+  set(CMAKE_CXX_COMPILER  ${MINGW_PATH}/bin/g++.exe)
 endif()
 
 project(${NAME} VERSION 0.23.0)
@@ -33,7 +39,7 @@ else()
 endif()
 
 
-# 2. Set GLFW_PATH in .env.cmake to target specific glfw
+# 2. Set GLFW_PATH in .env.cmake or .env.UNIX.cmake to target specific glfw
 if (DEFINED GLFW_PATH)
   message(STATUS "Using GLFW path specified in .env")
   set(GLFW_INCLUDE_DIRS "${GLFW_PATH}/include")
@@ -41,7 +47,10 @@ if (DEFINED GLFW_PATH)
     set(GLFW_LIB "${GLFW_PATH}/lib-vc2019") # 2.1 Update lib-vc2019 to use same version as your visual studio
   elseif (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
     message(STATUS "USING MINGW")
-    set(GLFW_LIB "${GLFW_PATH}/lib-mingw-w64") # 2.1 make sure matches glfw mingw subdirectory
+    set(GLFW_LIB "${GLFW_PATH}/lib-mingw-w64")
+  elseif (CMAKE_GENERATOR STREQUAL "MSYS Makefiles")
+    message(STATUS "USING MSYS2 UCRT64")
+    set(GLFW_LIB "${GLFW_PATH}/include")
   endif()
 else()
   find_package(glfw3 3.3 REQUIRED)
@@ -54,14 +63,23 @@ else()
 	message(STATUS "Using glfw lib at: ${GLFW_LIB}")
 endif()
 
-# 3. Set BULLET_SDK_PATH in .env.cmake to target specific bullet installation
+# 3. Set BULLET_SDK_PATH in .env.cmake or .env.UNIX.cmake to target specific bullet installation
 if (DEFINED BULLET_SDK_PATH)
   set(Bullet_INCLUDE_DIRS "${BULLET_SDK_PATH}/include/bullet")
-  set(Bullet_LIBRARIES
-    "${BULLET_SDK_PATH}/lib/libBulletDynamics.so"
-    "${BULLET_SDK_PATH}/lib/libBulletCollision.so"
-    "${BULLET_SDK_PATH}/lib/libLinearMath.so"
-  )
+  if(UNIX)
+    set(Bullet_LIBRARIES
+      "${BULLET_SDK_PATH}/lib/libBulletDynamics.so"
+      "${BULLET_SDK_PATH}/lib/libBulletCollision.so"
+      "${BULLET_SDK_PATH}/lib/libLinearMath.so"
+    )
+  # File path in MSYS2 UCRT64
+  elseif(WIN32)
+    set(Bullet_LIBRARIES
+      "${BULLET_SDK_PATH}/lib/libBulletDynamics.dll.a"
+      "${BULLET_SDK_PATH}/lib/libBulletCollision.dll.a"
+      "${BULLET_SDK_PATH}/lib/libLinearMath.dll.a"
+    )
+  endif()
   set(Bullet_FOUND "True")
 else()
   find_path(Bullet_INCLUDE_DIRS btBulletDynamicsCommon.h PATH_SUFFIXES bullet)
@@ -86,13 +104,13 @@ endif()
 
 include_directories(external)
 
-# If TINYOBJ_PATH not specified in .env.cmake, try fetching from git repo
+# If TINYOBJ_PATH not specified in .env.UNIX.cmake, try fetching from git repo
 if (NOT TINYOBJ_PATH)
   message(STATUS "TINYOBJ_PATH not specified in .env.Unix.cmake, using external/tinyobjloader")
   set(TINYOBJ_PATH external/tinyobjloader)
 endif()
 
-# If STB_PATH not specified in .env.cmake, try fetching from git repo
+# If STB_PATH not specified in .env.UNIX.cmake, try fetching from git repo
 if (NOT STB_PATH)
   message(STATUS "STB_PATH not specified in .env.Unix.cmake, using external/stbimage")
   set(STB_PATH external/stbimage)
@@ -134,7 +152,7 @@ if (WIN32)
     ${Bullet_LIBRARIES}
   )
 
-  target_link_libraries(${PROJECT_NAME} glfw3 vulkan-1)
+  target_link_libraries(${PROJECT_NAME} glfw3 vulkan-1 ${Bullet_LIBRARIES})
 elseif (UNIX)
     message(STATUS "CREATING BUILD FOR UNIX")
     target_include_directories(${PROJECT_NAME} PUBLIC
