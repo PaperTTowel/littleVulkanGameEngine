@@ -1,4 +1,5 @@
 set(GLFW_PATH C:/msys64/ucrt64)
+set(BULLET_SDK_PATH C:/msys64/ucrt64)
 set(GLM_PATH C:/msys64/ucrt64/include)
 set(VULKAN_SDK_PATH C:/VulkanSDK/1.4.304.1)
  
