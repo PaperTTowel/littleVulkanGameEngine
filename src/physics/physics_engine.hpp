@@ -5,6 +5,8 @@
 #include <memory>
 #include <vector>
 
+#include <glm/gtc/quaternion.hpp>
+
 namespace lve{
   class LveGameObject;
   class PhysicsEngine{

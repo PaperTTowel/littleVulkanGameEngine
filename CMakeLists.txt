@@ -3,7 +3,7 @@ if(WIN32)
   message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
   set(CMAKE_GENERATOR "MSYS Makefiles")
 elseif(UNIX)
-  include(./.env.UNIX.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
+  include(./.env.Unix.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
   message(STATUS "Local .env.UNIX.cmake: ${LOCAL_ENV}")
 endif()
 

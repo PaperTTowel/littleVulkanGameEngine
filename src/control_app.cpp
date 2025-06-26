@@ -6,6 +6,8 @@
 #include "systems/point_light_system.hpp"
 #include "keyboard_movement_controller.hpp"
 
+#include "debug/dear_imgui.hpp"
+
 // libs
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -18,6 +20,8 @@
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
+
+/*  날 잡아서 주석을 달 예정 ㅈㅅ ㅎㅎ;;  */
 
 namespace lve {
 
@@ -141,7 +145,7 @@ namespace lve {
         for (auto& [id, obj] : gameObjectManager.gameObjects) {
             objPtrs.push_back(&obj);
         }
-        gameObjectManager.physicsEngine->stepSimulation(frameIndex);
+        gameObjectManager.physicsEngine->stepSimulation(frameTime);
         gameObjectManager.physicsEngine->syncTransforms(objPtrs);
 
         // final step of update is updating the game objects buffer data
@@ -164,9 +168,9 @@ namespace lve {
   }
 
   void ControlApp::loadGameObjects() {
-
+    /*
     std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/testMap.obj");
-
+    
     auto &gameObj = gameObjectManager.createGameObject();
     gameObj.model = lveModel;
     gameObj.enableTextureType = 0;
@@ -174,8 +178,8 @@ namespace lve {
     gameObj.transform.scale = glm::vec3(3.f);
 
     gameObjectManager.physicsEngine->addBoxRigidBody(gameObj, .0f);
-
-    lveModel = LveModel::createModelFromFile(lveDevice, "models/character.obj");
+    */
+    std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "models/character.obj");
     std::shared_ptr<LveTexture> marbleTexture =
       LveTexture::createTextureFromFile(lveDevice, "../textures/cp.png");
 
@@ -186,6 +190,47 @@ namespace lve {
     characterObj.transform.translation = {-.5f, .5f, 0.f};
     characterObj.transform.scale = glm::vec3(3.f);
     characterId = characterObj.getId();
+
+    lveModel = LveModel::createModelFromFile(lveDevice, "models/physicsTestModel/plane.obj");
+
+    auto &physicsTestModel1 = gameObjectManager.createGameObject();
+    physicsTestModel1.model = lveModel;
+    physicsTestModel1.enableTextureType = 0;
+    physicsTestModel1.transform.translation = {-.5f, -.5f, 0.f};
+    physicsTestModel1.transform.scale = glm::vec3(1.f);
+    gameObjectManager.physicsEngine->addBoxRigidBody(physicsTestModel1, .0f);
+
+    std::cout << "[AddRigidBody] Translation: "
+          << physicsTestModel1.transform.translation.x << ", "
+          << physicsTestModel1.transform.translation.y << ", "
+          << physicsTestModel1.transform.translation.z << std::endl;
+
+    lveModel = LveModel::createModelFromFile(lveDevice, "models/physicsTestModel/cube1.obj");
+
+    auto &physicsTestModel2 = gameObjectManager.createGameObject();
+    physicsTestModel2.model = lveModel;
+    physicsTestModel2.enableTextureType = 0;
+    physicsTestModel2.transform.translation = {-.5f, 2.5f, 0.f};
+    physicsTestModel2.transform.scale = glm::vec3(1.f);
+    gameObjectManager.physicsEngine->addBoxRigidBody(physicsTestModel2, .2f);
+
+    lveModel = LveModel::createModelFromFile(lveDevice, "models/physicsTestModel/cube2.obj");
+
+    auto &physicsTestModel3 = gameObjectManager.createGameObject();
+    physicsTestModel3.model = lveModel;
+    physicsTestModel3.enableTextureType = 0;
+    physicsTestModel3.transform.translation = {-.5f, 4.5f, .5f};
+    physicsTestModel3.transform.scale = glm::vec3(1.f);
+    gameObjectManager.physicsEngine->addBoxRigidBody(physicsTestModel3, .2f);
+
+    lveModel = LveModel::createModelFromFile(lveDevice, "models/physicsTestModel/UV1.obj");
+
+    auto &physicsTestModel4 = gameObjectManager.createGameObject();
+    physicsTestModel4.model = lveModel;
+    physicsTestModel4.enableTextureType = 0;
+    physicsTestModel4.transform.translation = {-.5f, 6.5f, 0.7f};
+    physicsTestModel4.transform.scale = glm::vec3(1.f);
+    gameObjectManager.physicsEngine->addBoxRigidBody(physicsTestModel4, .5f);
 
     std::vector<glm::vec3> lightColors{
         {1.f, .1f, .1f},
