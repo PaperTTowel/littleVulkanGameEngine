@@ -1,0 +1,9 @@
+[submodule "external/glm"]
+	path = external/glm
+	url = https://github.com/g-truc/glm
+[submodule "external/imguiZmo"]
+	path = external/imguiZmo
+	url = https://github.com/CedricGuillemet/ImGuizmo
+[submodule "external/imgui"]
+	path = external/imgui
+	url = https://github.com/ocornut/imgui
