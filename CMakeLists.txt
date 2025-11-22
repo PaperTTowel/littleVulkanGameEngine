@@ -1,206 +1,118 @@
+# CMake 최소 요구 버전 설정
+cmake_minimum_required(VERSION 3.16)
+
+# 프로젝트 이름 및 언어 설정
+project(VulkanGameEngine LANGUAGES CXX)
+
+# C++ 표준 설정 (C++17)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# MSVC 컴파일러를 위한 기본 플래그 설정
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc")
+endif()
+
+# --- 외부 라이브러리 및 소스 파일 설정 ---
+
+# 1. Vulkan (시스템에 설치된 SDK 사용)
+# find_package를 사용하여 시스템에서 Vulkan SDK를 찾습니다.
+# REQUIRED는 SDK를 찾지 못하면 에러를 발생시킵니다.
+find_package(Vulkan REQUIRED)
+
+# 2. ImGui 및 ImGuiZmo (소스 파일 직접 포함)
+# ImGui 소스 파일 목록 (필요한 백엔드 포함)
+file(GLOB IMGUI_SOURCES
+    "external/imgui/*.cpp"
+    "external/imgui/backends/imgui_impl_glfw.cpp"
+    "external/imgui/backends/imgui_impl_vulkan.cpp"
+)
+# ImGuiZmo 소스 파일 목록
+file(GLOB IMGUIZMO_SOURCES
+    "external/imguiZmo/*.cpp"
+)
+
+# 3. 프로젝트 소스 파일 Glob
+file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.hpp")
+
+
+# --- 실행 파일 생성 ---
+
+# 실행 파일 타겟 생성
+add_executable(${PROJECT_NAME} ${SOURCES} ${IMGUI_SOURCES} ${IMGUIZMO_SOURCES})
+
+# --- 헤더 파일 경로 설정 ---
+
+# 타겟에 헤더 파일 경로 추가
+target_include_directories(${PROJECT_NAME} PRIVATE
+    "src"
+    "external/glfw/include"
+    "external/glm"
+    "external/imgui"
+    "external/imguiZmo"
+    "external/stbimage"
+    "external/tinyobjloader"
+)
+
+# ImGui/ImGuizmo 호환성을 위한 컴파일 정의 추가
+target_compile_definitions(${PROJECT_NAME} PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
+
+# --- 라이브러리 링크 ---
+
+# 타겟에 필요한 라이브러리 링크
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    # Vulkan 라이브러리 (find_package가 찾아준 타겟)
+    Vulkan::Vulkan
+
+    # GLFW 라이브러리 파일 직접 지정
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/glfw/lib-vc2022/glfw3.lib"
+)
+
+# --- 빌드 후 처리 ---
+
+# 1. 셰이더 파일(.spv)을 실행 파일 디렉토리의 Shaders 폴더로 복사
+# 먼저 Shaders 폴더 생성
+add_custom_command(
+    TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${PROJECT_NAME}>/Shaders"
+    COMMENT "Creating Shaders directory in output folder"
+)
+
+# .spv 파일들을 하나씩 복사
+file(GLOB SHADER_FILES "src/Shaders/*.spv")
+foreach(SHADER_FILE ${SHADER_FILES})
+    get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
+    add_custom_command(
+        TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${SHADER_FILE}"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/Shaders/${SHADER_NAME}"
+        COMMENT "Copying ${SHADER_NAME} to Shaders folder"
+    )
+endforeach()
+
+
+# 2. GLFW DLL을 실행 파일 디렉토리로 복사 (Windows에서 실행 시 필요)
 if(WIN32)
-  include(./.env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
-  message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
-  set(CMAKE_GENERATOR "MSYS Makefiles")
-elseif(UNIX)
-  include(./.env.UNIX.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
-  message(STATUS "Local .env.UNIX.cmake: ${LOCAL_ENV}")
-endif()
-
-cmake_minimum_required(VERSION 3.11.0)
-
-set(NAME LveEngine)
-
-message(STATUS "using ${CMAKE_GENERATOR}")
-if (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
-  if (NOT MINGW_PATH)
-    message(FATAL_ERROR "MINGW_PATH not set in .env.Unix.cmake")
-  endif()
-  set(USE_MINGW "True")
-  set(CMAKE_C_COMPILER ${MINGW_PATH}/bin/gcc.exe)
-  set(CMAKE_CXX_COMPILER  ${MINGW_PATH}/bin/g++.exe)
-endif()
-
-project(${NAME} VERSION 0.23.0)
-
-# 1. Set VULKAN_SDK_PATH in .env.cmake to target specific vulkan version
-if (DEFINED VULKAN_SDK_PATH)
-  set(Vulkan_INCLUDE_DIRS "${VULKAN_SDK_PATH}/Include") # 1.1 Make sure this include path is correct
-  set(Vulkan_LIBRARIES "${VULKAN_SDK_PATH}/Lib") # 1.2 Make sure lib path is correct
-  set(Vulkan_FOUND "True")
-else()
-  find_package(Vulkan REQUIRED) # throws error if could not find Vulkan
-  message(STATUS "Found Vulkan: $ENV{VULKAN_SDK}")
-endif()
-if (NOT Vulkan_FOUND)
-	message(FATAL_ERROR "Could not find Vulkan library!")
-else()
-	message(STATUS "Using vulkan lib at: ${Vulkan_LIBRARIES}")
-endif()
-
-
-# 2. Set GLFW_PATH in .env.cmake or .env.UNIX.cmake to target specific glfw
-if (DEFINED GLFW_PATH)
-  message(STATUS "Using GLFW path specified in .env")
-  set(GLFW_INCLUDE_DIRS "${GLFW_PATH}/include")
-  if (MSVC)
-    set(GLFW_LIB "${GLFW_PATH}/lib-vc2019") # 2.1 Update lib-vc2019 to use same version as your visual studio
-  elseif (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
-    message(STATUS "USING MINGW")
-    set(GLFW_LIB "${GLFW_PATH}/lib-mingw-w64")
-  elseif (CMAKE_GENERATOR STREQUAL "MSYS Makefiles")
-    message(STATUS "USING MSYS2 UCRT64")
-    set(GLFW_LIB "${GLFW_PATH}/include")
-  endif()
-else()
-  find_package(glfw3 3.3 REQUIRED)
-  set(GLFW_LIB glfw)
-  message(STATUS "Found GLFW")
-endif()
-if (NOT GLFW_LIB)
-	message(FATAL_ERROR "Could not find glfw library!")
-else()
-	message(STATUS "Using glfw lib at: ${GLFW_LIB}")
-endif()
-
-# 3. Set BULLET_SDK_PATH in .env.cmake or .env.UNIX.cmake to target specific bullet installation
-if (DEFINED BULLET_SDK_PATH)
-  set(Bullet_INCLUDE_DIRS "${BULLET_SDK_PATH}/include/bullet")
-  if(UNIX)
-    set(Bullet_LIBRARIES
-      "${BULLET_SDK_PATH}/lib/libBulletDynamics.so"
-      "${BULLET_SDK_PATH}/lib/libBulletCollision.so"
-      "${BULLET_SDK_PATH}/lib/libLinearMath.so"
-    )
-  # File path in MSYS2 UCRT64
-  elseif(WIN32)
-    set(Bullet_LIBRARIES
-      "${BULLET_SDK_PATH}/lib/libBulletDynamics.dll.a"
-      "${BULLET_SDK_PATH}/lib/libBulletCollision.dll.a"
-      "${BULLET_SDK_PATH}/lib/libLinearMath.dll.a"
-    )
-  endif()
-  set(Bullet_FOUND "True")
-else()
-  find_path(Bullet_INCLUDE_DIRS btBulletDynamicsCommon.h PATH_SUFFIXES bullet)
-  find_library(BulletDynamics_LIB BulletDynamics)
-  find_library(BulletCollision_LIB BulletCollision)
-  find_library(LinearMath_LIB LinearMath)
-
-  if (Bullet_INCLUDE_DIRS AND BulletDynamics_LIB AND BulletCollision_LIB AND LinearMath_LIB)
-    set(Bullet_LIBRARIES ${BulletDynamics_LIB} ${BulletCollision_LIB} ${LinearMath_LIB})
-    set(Bullet_FOUND "True")
-  else()
-    set(Bullet_FOUND "False")
-  endif()
-endif()
-
-if (NOT Bullet_FOUND)
-  message(FATAL_ERROR "Could not find Bullet physics library!")
-else()
-  message(STATUS "Using Bullet includes: ${Bullet_INCLUDE_DIRS}")
-  message(STATUS "Using Bullet libs: ${Bullet_LIBRARIES}")
-endif()
-
-include_directories(external)
-
-# If TINYOBJ_PATH not specified in .env.UNIX.cmake, try fetching from git repo
-if (NOT TINYOBJ_PATH)
-  message(STATUS "TINYOBJ_PATH not specified in .env.Unix.cmake, using external/tinyobjloader")
-  set(TINYOBJ_PATH external/tinyobjloader)
-endif()
-
-# If STB_PATH not specified in .env.UNIX.cmake, try fetching from git repo
-if (NOT STB_PATH)
-  message(STATUS "STB_PATH not specified in .env.Unix.cmake, using external/stbimage")
-  set(STB_PATH external/stbimage)
-endif()
-
-file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
-
-add_executable(${PROJECT_NAME} ${SOURCES})
-
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
-
-set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
-
-if (WIN32)
-  message(STATUS "CREATING BUILD FOR WINDOWS")
-
-  if (USE_MINGW)
-    target_include_directories(${PROJECT_NAME} PUBLIC
-      ${MINGW_PATH}/include
-    )
-    target_link_directories(${PROJECT_NAME} PUBLIC
-      ${MINGW_PATH}/lib
-    )
-  endif()
-
-  target_include_directories(${PROJECT_NAME} PUBLIC
-    ${PROJECT_SOURCE_DIR}/src
-    ${Vulkan_INCLUDE_DIRS}
-    ${TINYOBJ_PATH}
-    ${STB_PATH}
-    ${GLFW_INCLUDE_DIRS}
-    ${GLM_PATH}
-    ${Bullet_INCLUDE_DIRS}
-    )
-
-  target_link_directories(${PROJECT_NAME} PUBLIC
-    ${Vulkan_LIBRARIES}
-    ${GLFW_LIB}
-    ${Bullet_LIBRARIES}
-  )
-
-  target_link_libraries(${PROJECT_NAME} glfw3 vulkan-1 ${Bullet_LIBRARIES})
-elseif (UNIX)
-    message(STATUS "CREATING BUILD FOR UNIX")
-    target_include_directories(${PROJECT_NAME} PUBLIC
-      ${PROJECT_SOURCE_DIR}/src
-      ${TINYOBJ_PATH}
-      ${STB_PATH}
-      ${Bullet_INCLUDE_DIRS}
-    )
-    target_link_libraries(${PROJECT_NAME}
-      glfw
-      ${Vulkan_LIBRARIES}
-      ${Bullet_LIBRARIES}
+    add_custom_command(
+        TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMAKE_CURRENT_SOURCE_DIR}/external/glfw/lib-vc2022/glfw3.dll"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMENT "Copying glfw3.dll to output directory"
     )
 endif()
 
-
-############## Build SHADERS #######################
-
-# Find all vertex and fragment sources within shaders directory
-# taken from VBlancos vulkan tutorial
-# https://github.com/vblanco20-1/vulkan-guide/blob/all-chapters/CMakeLists.txt
-find_program(GLSL_VALIDATOR glslangValidator HINTS
-  ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}
-  /usr/bin
-  /usr/local/bin
-  ${VULKAN_SDK_PATH}/Bin
-  ${VULKAN_SDK_PATH}/Bin32
-  $ENV{VULKAN_SDK}/Bin/
-  $ENV{VULKAN_SDK}/Bin32/
+# 3. Assets 폴더를 실행 파일 디렉토리로 복사
+add_custom_command(
+    TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/Assets"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/Assets"
+    COMMENT "Copying Assets folder to output directory"
 )
 
-# get all .vert and .frag files in shaders directory
-file(GLOB_RECURSE GLSL_SOURCE_FILES
-  "${PROJECT_SOURCE_DIR}/shaders/*.frag"
-  "${PROJECT_SOURCE_DIR}/shaders/*.vert"
-)
-
-foreach(GLSL ${GLSL_SOURCE_FILES})
-  get_filename_component(FILE_NAME ${GLSL} NAME)
-  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILE_NAME}.spv")
-  add_custom_command(
-    OUTPUT ${SPIRV}
-    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
-    DEPENDS ${GLSL})
-  list(APPEND SPIRV_BINARY_FILES ${SPIRV})
-endforeach(GLSL)
-
-add_custom_target(
-    Shaders
-    DEPENDS ${SPIRV_BINARY_FILES}
-)
+# 메시지 출력
+message(STATUS "CMake configuration finished. You can now build the project.")
+message(STATUS "IDE: Visual Studio")
+message(STATUS "Compiler: MSVC")
