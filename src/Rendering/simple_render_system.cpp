@@ -18,15 +18,17 @@ namespace lve {
   struct SimplePushConstantData {
     glm::mat4 modelMatrix{1.f};
     glm::mat4 normalMatrix{1.f};
-    int useTexture; // 0 = 꺼짐, 1 = 스프라이트 형식의 텍스쳐(애니메이션 활성화), 2 = 스프라이트 형식이 아닌 텍스쳐
+    int useTexture; // 0 = 꺼짐, 1 = ?�프?�이???�식???�스�??�니메이???�성??, 2 = ?�프?�이???�식???�닌 ?�스�?
     int currentFrame;
     int objectState;
     int direction;
+    int debugView; // 1 = show normals, 0 = normal shading
   };
 
-  SimpleRenderSystem::SimpleRenderSystem(LveDevice &device, VkRenderPass renderPass, VkDescriptorSetLayout globalSetLayout) : lveDevice{device} {
+  SimpleRenderSystem::SimpleRenderSystem(LveDevice &device, VkRenderPass renderPass, VkDescriptorSetLayout globalSetLayout)
+    : lveDevice{device}, renderPass{renderPass} {
     createPipelineLayout(globalSetLayout);
-    createPipeline(renderPass);
+    createPipelines(renderPass);
   }
 
   SimpleRenderSystem::~SimpleRenderSystem() {
@@ -63,22 +65,40 @@ namespace lve {
     }
   }
 
-  void SimpleRenderSystem::createPipeline(VkRenderPass renderPass) {
+  void SimpleRenderSystem::createPipelines(VkRenderPass renderPass) {
     assert(pipelineLayout != nullptr && "Cannot create pipeline before pipeline layout!");
 
-    PipelineConfigInfo pipelineConfig{};
-    LvePipeline::defaultPipelineConfigInfo(pipelineConfig);
-    pipelineConfig.renderPass = renderPass;
-    pipelineConfig.pipelineLayout = pipelineLayout;
-    lvePipeline = std::make_unique<LvePipeline>(
+    PipelineConfigInfo fillConfig{};
+    LvePipeline::defaultPipelineConfigInfo(fillConfig);
+    fillConfig.renderPass = renderPass;
+    fillConfig.pipelineLayout = pipelineLayout;
+    fillPipeline = std::make_unique<LvePipeline>(
       lveDevice,
       "Shaders/simple_shader.vert.spv",
       "Shaders/simple_shader.frag.spv",
-      pipelineConfig);
+      fillConfig);
+
+    PipelineConfigInfo wireConfig{};
+    LvePipeline::defaultPipelineConfigInfo(wireConfig);
+    wireConfig.renderPass = renderPass;
+    wireConfig.pipelineLayout = pipelineLayout;
+    wireConfig.rasterizationInfo.polygonMode = VK_POLYGON_MODE_LINE;
+    wireConfig.rasterizationInfo.lineWidth = 1.0f;
+    wireframePipeline = std::make_unique<LvePipeline>(
+      lveDevice,
+      "Shaders/simple_shader.vert.spv",
+      "Shaders/simple_shader.frag.spv",
+      wireConfig);
+  }
+
+  void SimpleRenderSystem::setWireframe(bool enabled) {
+    wireframeEnabled = enabled;
   }
 
   void SimpleRenderSystem::renderGameObjects(FrameInfo &frameInfo) {
-    lvePipeline->bind(frameInfo.commandBuffer);
+    LvePipeline* activePipeline =
+      (wireframeEnabled && wireframePipeline) ? wireframePipeline.get() : fillPipeline.get();
+    activePipeline->bind(frameInfo.commandBuffer);
 
     vkCmdBindDescriptorSets(
       frameInfo.commandBuffer,
@@ -114,7 +134,7 @@ namespace lve {
         0,
         nullptr);
       
-      // GLSL로 전달
+      // GLSL�??�달
       SimplePushConstantData push{};
       push.modelMatrix = obj.transform.mat4();
       push.normalMatrix = obj.transform.normalMatrix();
@@ -122,6 +142,7 @@ namespace lve {
       push.currentFrame = obj.currentFrame;
       push.objectState = static_cast<int>(obj.objState);
       push.direction = static_cast<int>(obj.directions);
+      push.debugView = normalViewEnabled ? 1 : 0;
 
       vkCmdPushConstants(
         frameInfo.commandBuffer,
@@ -136,3 +157,5 @@ namespace lve {
     }
   }
 } // namespace lve
+
+

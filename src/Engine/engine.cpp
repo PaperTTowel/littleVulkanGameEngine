@@ -5,6 +5,7 @@
 #include "Rendering/simple_render_system.hpp"
 #include "Rendering/point_light_system.hpp"
 #include "utils/keyboard_movement_controller.hpp"
+#include "ImGui/imgui_layer.hpp"
 
 // libs
 #define GLM_FORCE_RADIANS
@@ -79,6 +80,8 @@ namespace lve {
       lveRenderer.getSwapChainRenderPass(),
       globalSetLayout->getDescriptorSetLayout()};
     LveCamera camera{};
+    ImGuiLayer imgui{lveWindow, lveDevice};
+    imgui.init(lveRenderer.getSwapChainRenderPass());
 
     auto &viewerObject = gameObjectManager.createGameObject();
     viewerObject.transform.translation.z = -2.5f;
@@ -126,6 +129,16 @@ namespace lve {
           *framePools[frameIndex],
           gameObjectManager.gameObjects};
 
+        imgui.newFrame();
+        imgui.buildUI(
+          frameTime,
+          viewerObject.transform.translation,
+          viewerObject.transform.rotation,
+          wireframeEnabled,
+          normalViewEnabled);
+        simpleRenderSystem.setWireframe(wireframeEnabled);
+        simpleRenderSystem.setNormalView(normalViewEnabled);
+
         // update
         GlobalUbo ubo{};
         ubo.projection = camera.getProjection();
@@ -154,12 +167,14 @@ namespace lve {
         // order here matters
         simpleRenderSystem.renderGameObjects(frameInfo);
         pointLightSystem.render(frameInfo);
+        imgui.render(commandBuffer);
 
         lveRenderer.endSwapChainRenderPass(commandBuffer);
         lveRenderer.endFrame();
       }
     }
 
+    imgui.shutdown();
     vkDeviceWaitIdle(lveDevice.device());
   }
 

@@ -151,6 +151,7 @@ void LveDevice::createLogicalDevice() {
 
   VkPhysicalDeviceFeatures deviceFeatures = {};
   deviceFeatures.samplerAnisotropy = VK_TRUE;
+  deviceFeatures.fillModeNonSolid = VK_TRUE;
 
   VkDeviceCreateInfo createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -210,7 +211,7 @@ bool LveDevice::isDeviceSuitable(VkPhysicalDevice device) {
   vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
 
   return indices.isComplete() && extensionsSupported && swapChainAdequate &&
-         supportedFeatures.samplerAnisotropy;
+         supportedFeatures.samplerAnisotropy && supportedFeatures.fillModeNonSolid;
 }
 
 void LveDevice::populateDebugMessengerCreateInfo(

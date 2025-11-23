@@ -16,6 +16,11 @@ namespace lve {
     SimpleRenderSystem(LveDevice &device, VkRenderPass renderPass, VkDescriptorSetLayout globalSetLayout);
     ~SimpleRenderSystem();
 
+    void setWireframe(bool enabled);
+    bool isWireframeEnabled() const { return wireframeEnabled; }
+    void setNormalView(bool enabled) { normalViewEnabled = enabled; }
+    bool isNormalView() const { return normalViewEnabled; }
+
     SimpleRenderSystem(const LveWindow &) = delete;
     SimpleRenderSystem &operator=(const LveWindow &) = delete;
 
@@ -23,12 +28,16 @@ namespace lve {
 
   private:
     void createPipelineLayout(VkDescriptorSetLayout globalSetLayout);
-    void createPipeline(VkRenderPass renderPass);
+    void createPipelines(VkRenderPass renderPass);
 
     LveDevice &lveDevice;
-    std::unique_ptr<LvePipeline> lvePipeline;
+    VkRenderPass renderPass;
+    std::unique_ptr<LvePipeline> fillPipeline;
+    std::unique_ptr<LvePipeline> wireframePipeline;
     VkPipelineLayout pipelineLayout;
 
     std::unique_ptr<LveDescriptorSetLayout> renderSystemLayout;
+    bool wireframeEnabled{false};
+    bool normalViewEnabled{false};
   };
 } // namespace lve

@@ -9,10 +9,10 @@ layout (location = 0) out vec4 outColor;
 
 struct PointLight {
   vec4 position; // ignore w
-  vec4 color; // w is intensity
+  vec4 color;    // w is intensity
 };
 
-layout(set = 0, binding = 0) uniform GlobalUbo {
+layout (set = 0, binding = 0) uniform GlobalUbo {
   mat4 projection;
   mat4 view;
   mat4 invView;
@@ -26,16 +26,24 @@ layout (set = 1, binding = 1) uniform sampler2D diffuseMap;
 layout(push_constant) uniform Push {
   mat4 modelMatrix;
   mat4 normalMatrix;
-  int useTexture; // 0 = 꺼짐, 1 = 스프라이트 형식의 텍스쳐(애니메이션 활성화), 2 = 스프라이트 형식이 아닌 텍스쳐
+  int useTexture;   // 0 = vertex color, 1 = texture sample, 2 = texture with flip
   int currentFrame;
   int objectState;
   int direction;
+  int debugView;    // 1 = visualize normals, 0 = regular shading
 } push;
 
 void main() {
   vec3 diffuseLight = ubo.ambientLightColor.xyz * ubo.ambientLightColor.w;
   vec3 specularLight = vec3(0.0);
   vec3 surfaceNormal = normalize(fragNormalWorld);
+
+  // Debug normal view
+  if (push.debugView == 1) {
+    vec3 normalColor = surfaceNormal * 0.5 + 0.5;
+    outColor = vec4(normalColor, 1.0);
+    return;
+  }
 
   vec3 cameraPosWorld = ubo.invView[3].xyz;
   vec3 viewDirection = normalize(cameraPosWorld - fragPosWorld);
@@ -61,20 +69,19 @@ void main() {
 
   // sprite texture animation
   vec2 uvOffset = vec2(0.0);
-  float frameWidth = 1.0 / 6.0; // 기본 가로 프레임 개수
-  if(push.objectState == 1){
+  float frameWidth = 1.0 / 6.0; // default columns
+  if (push.objectState == 1) {
     frameWidth = 1.0;
   }
-  float frameHeight = 1.0 / 2.0; // 세로 프레임 개수
+  float frameHeight = 1.0 / 2.0; // rows
   uvOffset.x = frameWidth * float(push.currentFrame);
   uvOffset.y = frameHeight * float(push.objectState);
   vec2 animatedUv = fragUv + uvOffset;
-  if(push.direction == 2) { // 방향이 LEFT일 경우 UV 좌표 반전
+  if (push.direction == 2) { // LEFT
     animatedUv.x = 1.0 - animatedUv.x;
   }
 
   vec3 color = fragColor;
-  // 임시로 오브젝트의 vec3과 텍스쳐의 vec4를 분리해놓음 (이후 통합할 예정)
   vec4 sampledColor = texture(diffuseMap, animatedUv);
   if (push.useTexture == 1) {
     color = sampledColor.xyz;
@@ -82,8 +89,7 @@ void main() {
   
   outColor = vec4(diffuseLight * color + specularLight * fragColor, 1.0);
 
-  // 텍스쳐에 투명도가 있을경우 렌더링을 하지 않음
-  if(sampledColor.a < 0.1){
+  if (sampledColor.a < 0.1) {
     discard;
   }
 }

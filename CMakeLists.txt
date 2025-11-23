@@ -49,6 +49,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "external/glfw/include"
     "external/glm"
     "external/imgui"
+    "external/imgui/backends"
     "external/imguiZmo"
     "external/stbimage"
     "external/tinyobjloader"
@@ -68,6 +69,46 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/glfw/lib-vc2022/glfw3.lib"
 )
 
+############## Build SHADERS #######################
+
+# Find all vertex and fragment sources within shaders directory
+# taken from VBlancos vulkan tutorial
+# https://github.com/vblanco20-1/vulkan-guide/blob/all-chapters/CMakeLists.txt
+find_program(GLSL_VALIDATOR glslangValidator HINTS
+    ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}
+    /usr/bin
+    /usr/local/bin
+    ${VULKAN_SDK_PATH}/Bin
+    ${VULKAN_SDK_PATH}/Bin32
+    $ENV{VULKAN_SDK}/Bin/
+    $ENV{VULKAN_SDK}/Bin32/
+)
+
+# get all .vert and .frag files in shaders directory (src/Shaders)
+file(GLOB_RECURSE GLSL_SOURCE_FILES
+    "${PROJECT_SOURCE_DIR}/src/Shaders/*.frag"
+    "${PROJECT_SOURCE_DIR}/src/Shaders/*.vert"
+)
+
+set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/Shaders")
+file(MAKE_DIRECTORY ${SHADER_OUTPUT_DIR})
+
+foreach(GLSL ${GLSL_SOURCE_FILES})
+    get_filename_component(FILE_NAME ${GLSL} NAME)
+    set(SPIRV "${SHADER_OUTPUT_DIR}/${FILE_NAME}.spv")
+    add_custom_command(
+        OUTPUT ${SPIRV}
+        COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
+        DEPENDS ${GLSL})
+    list(APPEND SPIRV_BINARY_FILES ${SPIRV})
+endforeach(GLSL)
+
+add_custom_target(
+    Shaders
+    DEPENDS ${SPIRV_BINARY_FILES}
+)
+add_dependencies(${PROJECT_NAME} Shaders)
+
 # --- 빌드 후 처리 ---
 
 # 1. 셰이더 파일(.spv)을 실행 파일 디렉토리의 Shaders 폴더로 복사
@@ -79,13 +120,12 @@ add_custom_command(
 )
 
 # .spv 파일들을 하나씩 복사
-file(GLOB SHADER_FILES "src/Shaders/*.spv")
-foreach(SHADER_FILE ${SHADER_FILES})
-    get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
+foreach(SPIRV_FILE ${SPIRV_BINARY_FILES})
+    get_filename_component(SHADER_NAME ${SPIRV_FILE} NAME)
     add_custom_command(
         TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-            "${SHADER_FILE}"
+            "${SPIRV_FILE}"
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>/Shaders/${SHADER_NAME}"
         COMMENT "Copying ${SHADER_NAME} to Shaders folder"
     )

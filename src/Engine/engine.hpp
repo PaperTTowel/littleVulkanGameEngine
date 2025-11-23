@@ -36,5 +36,7 @@ namespace lve {
     LveGameObjectManager gameObjectManager{lveDevice};
 
     LveGameObject::id_t characterId;
+    bool wireframeEnabled{false};
+    bool normalViewEnabled{false};
   };
 } // namespace lve
