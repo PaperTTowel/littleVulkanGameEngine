@@ -1,11 +1,13 @@
-#include "engine.hpp"
+﻿#include "engine.hpp"
 
 #include "Backend/buffer.hpp"
 #include "camera.hpp"
 #include "Rendering/simple_render_system.hpp"
+#include "Rendering/sprite_render_system.hpp"
 #include "Rendering/point_light_system.hpp"
 #include "utils/keyboard_movement_controller.hpp"
 #include "ImGui/imgui_layer.hpp"
+#include "ImGui/panels/character_panel.hpp"
 
 // libs
 #define GLM_FORCE_RADIANS
@@ -18,6 +20,7 @@
 #include <chrono>
 #include <cassert>
 #include <iostream>
+#include <string>
 #include <stdexcept>
 
 namespace lve {
@@ -75,6 +78,10 @@ namespace lve {
       lveDevice,
       lveRenderer.getSwapChainRenderPass(),
       globalSetLayout->getDescriptorSetLayout()};
+    SpriteRenderSystem spriteRenderSystem {
+      lveDevice,
+      lveRenderer.getSwapChainRenderPass(),
+      globalSetLayout->getDescriptorSetLayout()};
     PointLightSystem pointLightSystem {
       lveDevice,
       lveRenderer.getSwapChainRenderPass(),
@@ -85,10 +92,9 @@ namespace lve {
 
     auto &viewerObject = gameObjectManager.createGameObject();
     viewerObject.transform.translation.z = -2.5f;
-    // 개발자모드 전용 (자유로운 카메라 움직임)
+
     KeyboardMovementController cameraController{};
     CharacterMovementController characterController{};
-    // 캐릭터랑 카메라의 오프셋 위치 (카메라 초기값)
     //viewerObject.transform.rotation.y += 1.575f;
     //viewerObject.transform.rotation.x -= 0.4f;
 
@@ -101,19 +107,27 @@ namespace lve {
       float frameTime = std::chrono::duration<float, std::chrono::seconds::period>(newTime - currentTime).count();
       currentTime = newTime;
       
-      // 개발자모드 전용 (자유로운 카메라 움직임)
+      // camera
       cameraController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, viewerObject);
       camera.setViewYXZ(viewerObject.transform.translation, viewerObject.transform.rotation);
 
       float aspect = lveRenderer.getAspectRatio();
       camera.setPerspectiveProjection(glm::radians(50.f), aspect, 0.1f, 100.f);
 
-      // 캐릭터 업데이트
-      // auto &character = gameObjectManager.gameObjects.at(characterId);
-      // characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
-      // gameObjectManager.updateFrame(character, 6, frameTime, 0.15);
+      // character update (2D sprite)
+      auto &character = gameObjectManager.gameObjects.at(characterId);
+      characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
+      spriteAnimator->applySpriteState(character, character.objState);
+      const SpriteStateInfo* stateInfoPtr = nullptr;
+      auto stateIt = character.spriteStates.find(static_cast<int>(character.objState));
+      if (stateIt != character.spriteStates.end()) {
+        stateInfoPtr = &stateIt->second;
+      }
+      int frameCount = stateInfoPtr ? stateInfoPtr->frameCount : 6;
+      float frameDuration = stateInfoPtr ? stateInfoPtr->frameDuration : 0.15f;
+      gameObjectManager.updateFrame(character, frameCount, frameTime, frameDuration);
 
-      // 카메라가 부드럽게 캐릭터를 따라가도록 지정
+      // camera target character
       // glm::vec3 targetPos = character.transform.translation + glm::vec3(-3.0f, -2.0f, .0f);
       // viewerObject.transform.translation = glm::mix(viewerObject.transform.translation, targetPos, 0.1f);
 
@@ -136,8 +150,13 @@ namespace lve {
           viewerObject.transform.rotation,
           wireframeEnabled,
           normalViewEnabled);
+
+        BuildCharacterPanel(character, *spriteAnimator);
+
         simpleRenderSystem.setWireframe(wireframeEnabled);
         simpleRenderSystem.setNormalView(normalViewEnabled);
+        spriteRenderSystem.setBillboardMode(character.billboardMode);
+        spriteRenderSystem.setUseOrthoCamera(character.useOrthoCamera);
 
         // update
         GlobalUbo ubo{};
@@ -167,6 +186,33 @@ namespace lve {
         // order here matters
         simpleRenderSystem.renderGameObjects(frameInfo);
         pointLightSystem.render(frameInfo);
+
+        bool useOrthoForSprites = false;
+        for (auto &kv : gameObjectManager.gameObjects) {
+          auto &obj = kv.second;
+          if (obj.isSprite && obj.useOrthoCamera) {
+            useOrthoForSprites = true;
+            break;
+          }
+        }
+        if (useOrthoForSprites) {
+          LveCamera orthoCam{};
+          orthoCam.setViewYXZ(viewerObject.transform.translation, viewerObject.transform.rotation);
+          float aspectOrtho = lveRenderer.getAspectRatio();
+          float orthoHeight = 10.f;
+          float orthoWidth = orthoHeight * aspectOrtho;
+          orthoCam.setOrthographicProjection(-orthoWidth / 2.f, orthoWidth / 2.f, -orthoHeight / 2.f, orthoHeight / 2.f, -1.f, 10.f);
+
+          GlobalUbo orthoUbo{};
+          orthoUbo.projection = orthoCam.getProjection();
+          orthoUbo.view = orthoCam.getView();
+          orthoUbo.inverseView = orthoCam.getInverseView();
+          pointLightSystem.update(frameInfo, orthoUbo);
+          uboBuffers[frameIndex]->writeToBuffer(&orthoUbo);
+          uboBuffers[frameIndex]->flush();
+        }
+
+        spriteRenderSystem.renderSprites(frameInfo);
         imgui.render(commandBuffer);
 
         lveRenderer.endSwapChainRenderPass(commandBuffer);
@@ -189,6 +235,34 @@ namespace lve {
     gameObj.transform.scale = glm::vec3(1.f);
 
     // gameObjectManager.physicsEngine->addBoxRigidBody(gameObj, .0f);
+
+    // 2D sprite character (quad + texture atlas)
+    std::shared_ptr<LveModel> spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");
+
+    if (!loadSpriteMetadata("Assets/textures/characters/player.json", playerMeta)) {
+      std::cerr << "Failed to load player sprite metadata; using defaults\n";
+      playerMeta.atlasCols = 6;
+      playerMeta.atlasRows = 1;
+      playerMeta.size = {33.f, 44.f};
+      SpriteStateInfo idle{};
+      idle.row = 0; idle.frameCount = 6; idle.frameDuration = 0.15f; idle.loop = true; idle.atlasCols = 6; idle.atlasRows = 1; idle.texturePath = "Assets/textures/characters/playerIDLE.png";
+      SpriteStateInfo walk{};
+      walk.row = 0; walk.frameCount = 8; walk.frameDuration = 0.125f; walk.loop = true; walk.atlasCols = 8; walk.atlasRows = 1; walk.texturePath = "Assets/textures/characters/playerWalking.png";
+      playerMeta.states["idle"] = idle;
+      playerMeta.states["walking"] = walk;
+    }
+    spriteAnimator = std::make_unique<SpriteAnimator>(lveDevice, playerMeta);
+
+    auto &characterObj = gameObjectManager.createGameObject();
+    characterObj.model = spriteModel;
+    characterObj.enableTextureType = 1;
+    characterObj.isSprite = true;
+    characterObj.transform.translation = {0.f, 0.f, 0.f};
+    characterObj.transform.rotation = {0.f, 0.f, 0.f};
+    characterObj.billboardMode = BillboardMode::Cylindrical;
+    // characterObj.useOrthoCamera = true;
+    spriteAnimator->applySpriteState(characterObj, ObjectState::IDLE);
+    characterId = characterObj.getId();
 
     /*
     lveModel = LveModel::createModelFromFile(lveDevice, "Assets/models/cube.obj");
@@ -223,3 +297,4 @@ namespace lve {
     }
   }
 } // namespace lve
+

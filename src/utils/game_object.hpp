@@ -3,6 +3,7 @@
 #include "Rendering/model.hpp"
 #include "Engine/Backend/swap_chain.hpp"
 #include "Rendering/texture.hpp"
+#include "utils/sprite_metadata.hpp"
 // #include "physics/physics_engine.hpp"
 
 // libs
@@ -38,15 +39,23 @@ namespace lve {
   class LveGameObjectManager; // forward declare game object manager class
 
   enum class ObjectState { WALKING, IDLE };
+  enum class BillboardMode { None, Cylindrical, Spherical };
   enum class Direction { UP, DOWN, LEFT, RIGHT };
   class LveGameObject {
   public:
     using id_t = unsigned int;
     using Map = std::unordered_map<id_t, LveGameObject>;
-    int enableTextureType;
-    int currentFrame;
+    int enableTextureType{0};
+    int currentFrame{0};
     ObjectState objState = ObjectState::IDLE;
     Direction directions = Direction::RIGHT;
+    bool isSprite = false; // mark objects that should render via 2D sprite pipeline
+    BillboardMode billboardMode = BillboardMode::None;
+    bool useOrthoCamera = false;
+    float animationTimeAccumulator = 0.0f;
+    int atlasColumns{1};
+    int atlasRows{1};
+    std::unordered_map<int, SpriteStateInfo> spriteStates{};
 
     bool hasPhysics = false;
 

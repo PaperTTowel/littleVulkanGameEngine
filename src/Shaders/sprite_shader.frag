@@ -1,0 +1,44 @@
+#version 450
+
+layout (location = 0) in vec3 fragColor;
+layout (location = 1) in vec2 fragUv;
+
+layout (location = 0) out vec4 outColor;
+
+layout (set = 1, binding = 1) uniform sampler2D diffuseMap;
+
+layout(push_constant) uniform Push {
+  mat4 modelMatrix;
+  mat4 normalMatrix;
+  int useTexture;   // 0 = vertex color, 1 = texture sample, 2 = texture with flip
+  int currentFrame;
+  int objectState;
+  int direction;
+  int debugView;
+  int atlasCols;
+  int atlasRows;
+  int rowIndex;
+} push;
+
+void main() {
+  // simple atlas animation: columns x rows = 6 x 2 by default
+  float cols = max(1.0, float(push.atlasCols));
+  float rows = max(1.0, float(push.atlasRows));
+  float frameWidth = 1.0 / cols;
+  float frameHeight = 1.0 / rows;
+  vec2 uvOffset = vec2(frameWidth * float(push.currentFrame), frameHeight * float(push.rowIndex));
+  vec2 animatedUv = uvOffset + fragUv * vec2(frameWidth, frameHeight);
+  if (push.direction == 2) { // LEFT
+    animatedUv.x = 1.0 - animatedUv.x;
+  }
+
+  vec4 sampledColor = texture(diffuseMap, animatedUv);
+
+  // basic unlit sprite
+  vec3 baseColor = (push.useTexture == 1) ? sampledColor.xyz : fragColor;
+  outColor = vec4(baseColor, sampledColor.a);
+
+  if (sampledColor.a < 0.1) {
+    discard;
+  }
+}

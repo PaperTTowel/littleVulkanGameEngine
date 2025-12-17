@@ -1,4 +1,4 @@
-#include "simple_render_system.hpp"
+ï»¿#include "simple_render_system.hpp"
 
 // libs
 #define GLM_FORCE_RADIANS
@@ -18,7 +18,7 @@ namespace lve {
   struct SimplePushConstantData {
     glm::mat4 modelMatrix{1.f};
     glm::mat4 normalMatrix{1.f};
-    int useTexture; // 0 = êº¼ì§, 1 = ?¤í”„?¼ì´???•ì‹???ìŠ¤ì³?? ë‹ˆë©”ì´???œì„±??, 2 = ?¤í”„?¼ì´???•ì‹???„ë‹Œ ?ìŠ¤ì³?
+    int useTexture;
     int currentFrame;
     int objectState;
     int direction;
@@ -112,6 +112,7 @@ namespace lve {
 
     for (auto &kv : frameInfo.gameObjects) {
       auto &obj = kv.second;
+      if (obj.isSprite) continue;
       if (obj.model == nullptr) continue;
 
       // writing descriptor set each frame can slow performance
@@ -134,7 +135,6 @@ namespace lve {
         0,
         nullptr);
       
-      // GLSLë¡??„ë‹¬
       SimplePushConstantData push{};
       push.modelMatrix = obj.transform.mat4();
       push.normalMatrix = obj.transform.normalMatrix();
@@ -157,5 +157,7 @@ namespace lve {
     }
   }
 } // namespace lve
+
+
 
 

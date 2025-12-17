@@ -5,6 +5,8 @@
 #include "Backend/device.hpp"
 #include "Rendering/renderer.hpp"
 #include "Backend/descriptors.hpp"
+#include "utils/sprite_metadata.hpp"
+#include "utils/sprite_animator.hpp"
 
 // std
 #include <memory>
@@ -38,5 +40,7 @@ namespace lve {
     LveGameObject::id_t characterId;
     bool wireframeEnabled{false};
     bool normalViewEnabled{false};
+    SpriteMetadata playerMeta;
+    std::unique_ptr<SpriteAnimator> spriteAnimator;
   };
 } // namespace lve
