@@ -1,10 +1,15 @@
 ﻿#include "engine.hpp"
 
+// backend
 #include "Backend/buffer.hpp"
 #include "camera.hpp"
+
+// rendering
 #include "Rendering/simple_render_system.hpp"
 #include "Rendering/sprite_render_system.hpp"
 #include "Rendering/point_light_system.hpp"
+
+// utils
 #include "utils/keyboard_movement_controller.hpp"
 #include "ImGui/imgui_layer.hpp"
 #include "ImGui/panels/character_panel.hpp"
@@ -95,8 +100,6 @@ namespace lve {
 
     KeyboardMovementController cameraController{};
     CharacterMovementController characterController{};
-    //viewerObject.transform.rotation.y += 1.575f;
-    //viewerObject.transform.rotation.x -= 0.4f;
 
     auto currentTime = std::chrono::high_resolution_clock::now();
 
@@ -167,14 +170,12 @@ namespace lve {
         uboBuffers[frameIndex]->writeToBuffer(&ubo);
         uboBuffers[frameIndex]->flush();
 
-        // update physics engine
+        // update physics engine (add soon)
         std::vector<LveGameObject*> objPtrs;
         objPtrs.reserve(gameObjectManager.gameObjects.size());
         for (auto& [id, obj] : gameObjectManager.gameObjects) {
             objPtrs.push_back(&obj);
         }
-        // gameObjectManager.physicsEngine->stepSimulation(frameIndex);
-        // gameObjectManager.physicsEngine->syncTransforms(objPtrs);
 
         // final step of update is updating the game objects buffer data
         // The render functions MUST not change a game objects transform data
@@ -234,8 +235,6 @@ namespace lve {
     gameObj.transform.translation = {-.5f, .5f, 0.f};
     gameObj.transform.scale = glm::vec3(1.f);
 
-    // gameObjectManager.physicsEngine->addBoxRigidBody(gameObj, .0f);
-
     // 2D sprite character (quad + texture atlas)
     std::shared_ptr<LveModel> spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");
 
@@ -263,21 +262,7 @@ namespace lve {
     // characterObj.useOrthoCamera = true;
     spriteAnimator->applySpriteState(characterObj, ObjectState::IDLE);
     characterId = characterObj.getId();
-
-    /*
-    lveModel = LveModel::createModelFromFile(lveDevice, "Assets/models/cube.obj");
-    std::shared_ptr<LveTexture> marbleTexture =
-      LveTexture::createTextureFromFile(lveDevice, "Assets/textures/cp.png");
-
-    auto &characterObj = gameObjectManager.createGameObject();
-    characterObj.model = lveModel;
-    characterObj.enableTextureType = 1;
-    characterObj.diffuseMap = marbleTexture;
-    characterObj.transform.translation = {-.5f, .5f, 0.f};
-    characterObj.transform.scale = glm::vec3(3.f);
-    characterId = characterObj.getId();
-    */
-
+    
     std::vector<glm::vec3> lightColors{
         {1.f, .1f, .1f},
         {.1f, .1f, 1.f},
