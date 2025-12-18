@@ -34,6 +34,7 @@
 
 namespace lve {
 
+  /* Sprite state <-> string helpers */
   ObjectState ControlApp::objectStateFromString(const std::string &name) {
     if (name == "walking" || name == "walk") return ObjectState::WALKING;
     return ObjectState::IDLE;
@@ -47,6 +48,7 @@ namespace lve {
     }
   }
 
+  /* Engine bootstrap: descriptor pools and initial objects */
   ControlApp::ControlApp() {
     globalPool = LveDescriptorPool::Builder(lveDevice)
       .setMaxSets(LveSwapChain::MAX_FRAMES_IN_FLIGHT)
@@ -68,6 +70,7 @@ namespace lve {
 
   ControlApp::~ControlApp() {}
 
+  /* GameObject creation helpers (mesh/sprite/light) */
   LveGameObject &ControlApp::createMeshObject(const glm::vec3 &position) {
     if (!cubeModel) {
       cubeModel = LveModel::createModelFromFile(lveDevice, "Assets/models/colored_cube.obj");
@@ -110,6 +113,7 @@ namespace lve {
     return light;
   }
 
+  /* Scene snapshot export/import (editor save/load path) */
   Scene ControlApp::exportSceneSnapshot() const {
     Scene scene{};
     scene.version = 1;
@@ -238,6 +242,7 @@ namespace lve {
     importSceneSnapshot(scene);
   }
 
+  /* Main loop: input -> update -> render -> UI */
   void ControlApp::run() {
 
     std::vector<std::unique_ptr<LveBuffer>> uboBuffers(LveSwapChain::MAX_FRAMES_IN_FLIGHT);
@@ -339,6 +344,7 @@ namespace lve {
           *framePools[frameIndex],
           gameObjectManager.gameObjects};
 
+        // ImGui panels
         imgui.newFrame();
         imgui.buildUI(
           frameTime,
@@ -347,7 +353,7 @@ namespace lve {
           wireframeEnabled,
           normalViewEnabled);
 
-        BuildCharacterPanel(character, *spriteAnimator);
+        // BuildCharacterPanel(character, *spriteAnimator);
         auto hierarchyActions = editor::BuildHierarchyPanel(gameObjectManager, hierarchyState, characterId);
         auto sceneActions = editor::BuildScenePanel(scenePanelState);
         LveGameObject *selectedObj = nullptr;
@@ -410,12 +416,13 @@ namespace lve {
           loadSceneFromFile(scenePanelState.path);
         }
 
+        // rendering toggles pushed to shader systems
         simpleRenderSystem.setWireframe(wireframeEnabled);
         simpleRenderSystem.setNormalView(normalViewEnabled);
         spriteRenderSystem.setBillboardMode(character.billboardMode);
         spriteRenderSystem.setUseOrthoCamera(character.useOrthoCamera);
 
-        // update
+        // update UBOs & point lights
         GlobalUbo ubo{};
         ubo.projection = camera.getProjection();
         ubo.view = camera.getView();
@@ -451,6 +458,7 @@ namespace lve {
           }
         }
         if (useOrthoForSprites) {
+          // secondary pass for ortho sprites (billboard/UI-like)
           LveCamera orthoCam{};
           orthoCam.setViewYXZ(viewerObject.transform.translation, viewerObject.transform.rotation);
           float aspectOrtho = lveRenderer.getAspectRatio();
@@ -479,6 +487,7 @@ namespace lve {
     vkDeviceWaitIdle(lveDevice.device());
   }
 
+  /* Default scene bootstrap */
   void ControlApp::loadGameObjects() {
 
     cubeModel = LveModel::createModelFromFile(lveDevice, "Assets/models/colored_cube.obj");
@@ -522,4 +531,3 @@ namespace lve {
     }
   }
 } // namespace lve
-
