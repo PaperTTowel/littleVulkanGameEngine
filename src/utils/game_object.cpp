@@ -88,6 +88,41 @@ namespace lve {
     textureDefault = LveTexture::createTextureFromFile(device, "Assets/textures/missing.png");
   }
 
+  bool LveGameObjectManager::destroyGameObject(LveGameObject::id_t id) {
+    auto it = gameObjects.find(id);
+    if (it == gameObjects.end()) {
+      return false;
+    }
+    gameObjects.erase(it);
+    return true;
+  }
+
+  void LveGameObjectManager::clearAll() {
+    gameObjects.clear();
+    currentId = 0;
+  }
+
+  void LveGameObjectManager::clearAllExcept(std::optional<LveGameObject::id_t> protectedId) {
+    if (!protectedId.has_value()) {
+      clearAll();
+      return;
+    }
+    LveGameObject::id_t keepId = *protectedId;
+    for (auto it = gameObjects.begin(); it != gameObjects.end();) {
+      if (it->first == keepId) {
+        ++it;
+      } else {
+        it = gameObjects.erase(it);
+      }
+    }
+    // reset currentId to next available id
+    LveGameObject::id_t maxId = 0;
+    for (auto &kv : gameObjects) {
+      if (kv.first > maxId) maxId = kv.first;
+    }
+    currentId = maxId + 1;
+  }
+
   void LveGameObjectManager::updateBuffer(int frameIndex) {
     // copy model matrix and normal matrix for each gameObj into
     // buffer for this frame

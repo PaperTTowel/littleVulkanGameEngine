@@ -10,7 +10,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 // std
+#include <string>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 
 namespace lve {
@@ -56,6 +58,10 @@ namespace lve {
     int atlasColumns{1};
     int atlasRows{1};
     std::unordered_map<int, SpriteStateInfo> spriteStates{};
+    std::string spriteMetaPath;
+    std::string spriteStateName;
+    std::string modelPath;
+    std::string materialPath;
 
     bool hasPhysics = false;
 
@@ -64,7 +70,7 @@ namespace lve {
     LveGameObject &operator=(const LveGameObject &) = delete;
     LveGameObject &operator=(LveGameObject &&) = delete;
 
-    id_t getId() { return id; }
+    id_t getId() const { return id; }
 
     VkDescriptorBufferInfo getBufferInfo(int frameIndex);
 
@@ -105,6 +111,9 @@ namespace lve {
 
     LveGameObject &makePointLight(
       float intensity = 10.f, float radius = 0.1f, glm::vec3 color = glm::vec3(1.f));
+    bool destroyGameObject(LveGameObject::id_t id);
+    void clearAll();
+    void clearAllExcept(std::optional<LveGameObject::id_t> protectedId);
 
     VkDescriptorBufferInfo getBufferInfoForGameObject(
       int frameIndex, LveGameObject::id_t gameObjectId) const {

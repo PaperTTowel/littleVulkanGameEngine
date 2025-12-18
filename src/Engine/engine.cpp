@@ -13,6 +13,9 @@
 #include "utils/keyboard_movement_controller.hpp"
 #include "ImGui/imgui_layer.hpp"
 #include "ImGui/panels/character_panel.hpp"
+#include "Editor/inspector_panel.hpp"
+#include "Editor/scene_panel.hpp"
+#include "Engine/scene.hpp"
 
 // libs
 #define GLM_FORCE_RADIANS
@@ -25,10 +28,24 @@
 #include <chrono>
 #include <cassert>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <stdexcept>
 
 namespace lve {
+
+  ObjectState ControlApp::objectStateFromString(const std::string &name) {
+    if (name == "walking" || name == "walk") return ObjectState::WALKING;
+    return ObjectState::IDLE;
+  }
+
+  std::string ControlApp::objectStateToString(ObjectState state) {
+    switch (state) {
+      case ObjectState::WALKING: return "walking";
+      case ObjectState::IDLE:
+      default: return "idle";
+    }
+  }
 
   ControlApp::ControlApp() {
     globalPool = LveDescriptorPool::Builder(lveDevice)
@@ -50,6 +67,176 @@ namespace lve {
   }
 
   ControlApp::~ControlApp() {}
+
+  LveGameObject &ControlApp::createMeshObject(const glm::vec3 &position) {
+    if (!cubeModel) {
+      cubeModel = LveModel::createModelFromFile(lveDevice, "Assets/models/colored_cube.obj");
+    }
+    auto &obj = gameObjectManager.createGameObject();
+    obj.model = cubeModel;
+    obj.modelPath = "Assets/models/colored_cube.obj";
+    obj.enableTextureType = 0;
+    obj.isSprite = false;
+    obj.billboardMode = BillboardMode::None;
+    obj.useOrthoCamera = false;
+    obj.transform.translation = position;
+    obj.transform.scale = glm::vec3(1.f);
+    return obj;
+  }
+
+  LveGameObject &ControlApp::createSpriteObject(const glm::vec3 &position, ObjectState state, bool useOrtho, const std::string &metaPath) {
+    if (!spriteModel) {
+      spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");
+    }
+    auto &obj = gameObjectManager.createGameObject();
+    obj.model = spriteModel;
+    obj.enableTextureType = 1;
+    obj.isSprite = true;
+    obj.billboardMode = BillboardMode::Cylindrical;
+    obj.useOrthoCamera = useOrtho;
+    obj.spriteMetaPath = metaPath;
+    obj.transform.translation = position;
+    obj.transform.rotation = {0.f, 0.f, 0.f};
+    obj.objState = state;
+    if (spriteAnimator) {
+      spriteAnimator->applySpriteState(obj, state);
+    }
+    return obj;
+  }
+
+  LveGameObject &ControlApp::createPointLightObject(const glm::vec3 &position) {
+    auto &light = gameObjectManager.makePointLight(0.2f);
+    light.transform.translation = position;
+    return light;
+  }
+
+  Scene ControlApp::exportSceneSnapshot() const {
+    Scene scene{};
+    scene.version = 1;
+    scene.resources.basePath = "Assets/";
+    scene.resources.spritePath = "Assets/textures/characters/";
+    scene.resources.modelPath = "Assets/models/";
+    scene.resources.materialPath = "Assets/materials/";
+
+    for (const auto &kv : gameObjectManager.gameObjects) {
+      const auto &obj = kv.second;
+      if (!obj.model && !obj.pointLight && !obj.isSprite) {
+        continue;
+      }
+      SceneEntity e{};
+      e.id = "obj_" + std::to_string(obj.getId());
+      e.name = e.id;
+      e.transform.position = obj.transform.translation;
+      e.transform.rotation = obj.transform.rotation;
+      e.transform.scale = obj.transform.scale;
+
+      if (obj.pointLight) {
+        e.type = EntityType::Light;
+        LightComponent lc{};
+        lc.kind = LightKind::Point;
+        lc.color = obj.color;
+        lc.intensity = obj.pointLight->lightIntensity;
+        lc.range = 10.f;
+        lc.angle = 45.f;
+        e.light = lc;
+      } else if (obj.isSprite) {
+        e.type = EntityType::Sprite;
+        SpriteComponent sc{};
+        sc.spriteMeta = obj.spriteMetaPath.empty() ? "Assets/textures/characters/player.json" : obj.spriteMetaPath;
+        sc.state = obj.spriteStateName.empty() ? objectStateToString(obj.objState) : obj.spriteStateName;
+        sc.billboard = (obj.billboardMode == BillboardMode::Spherical) ? BillboardKind::Spherical
+          : (obj.billboardMode == BillboardMode::Cylindrical ? BillboardKind::Cylindrical : BillboardKind::None);
+        sc.useOrtho = obj.useOrthoCamera;
+        sc.layer = 0;
+        e.sprite = sc;
+      } else {
+        e.type = EntityType::Mesh;
+        MeshComponent mc{};
+        mc.model = obj.modelPath.empty() ? "Assets/models/colored_cube.obj" : obj.modelPath;
+        mc.material = obj.materialPath;
+        e.mesh = mc;
+      }
+
+      scene.entities.push_back(std::move(e));
+    }
+
+    return scene;
+  }
+
+  void ControlApp::importSceneSnapshot(const Scene &scene) {
+    gameObjectManager.clearAllExcept(viewerId);
+    cubeModel.reset();
+    spriteModel.reset();
+
+    // reload sprite metadata if provided by first sprite entity
+    SpriteMetadata loadedMeta = playerMeta;
+    std::string metaPath = "Assets/textures/characters/player.json";
+    for (const auto &e : scene.entities) {
+      if (e.sprite) {
+        metaPath = e.sprite->spriteMeta.empty() ? metaPath : e.sprite->spriteMeta;
+        break;
+      }
+    }
+    loadSpriteMetadata(metaPath, loadedMeta);
+    playerMeta = loadedMeta;
+    spriteAnimator = std::make_unique<SpriteAnimator>(lveDevice, playerMeta);
+
+    characterId = 0;
+    bool characterAssigned = false;
+    for (const auto &e : scene.entities) {
+      if (e.type == EntityType::Light) {
+        auto &light = createPointLightObject(e.transform.position);
+        light.color = e.light ? e.light->color : glm::vec3(1.f);
+        if (light.pointLight && e.light) {
+          light.pointLight->lightIntensity = e.light->intensity;
+        }
+        continue;
+      }
+
+      if (e.type == EntityType::Sprite && e.sprite) {
+        ObjectState desiredState = objectStateFromString(e.sprite->state);
+        auto &obj = createSpriteObject(e.transform.position, desiredState, e.sprite->useOrtho, e.sprite->spriteMeta);
+        obj.transform.rotation = e.transform.rotation;
+        obj.transform.scale = e.transform.scale;
+        obj.billboardMode = (e.sprite->billboard == BillboardKind::Spherical) ? BillboardMode::Spherical
+          : (e.sprite->billboard == BillboardKind::Cylindrical ? BillboardMode::Cylindrical : BillboardMode::None);
+        if (!characterAssigned) {
+          characterId = obj.getId();
+          characterAssigned = true;
+        }
+        continue;
+      }
+
+      if (e.type == EntityType::Mesh && e.mesh) {
+        auto &obj = createMeshObject(e.transform.position);
+        obj.transform.rotation = e.transform.rotation;
+        obj.transform.scale = e.transform.scale;
+        obj.modelPath = e.mesh->model;
+        continue;
+      }
+    }
+
+    if (!characterAssigned) {
+      auto &characterObj = createSpriteObject({0.f, 0.f, 0.f}, ObjectState::IDLE, true, metaPath);
+      characterId = characterObj.getId();
+    }
+  }
+
+  void ControlApp::saveSceneToFile(const std::string &path) {
+    Scene scene = exportSceneSnapshot();
+    if (!SceneSerializer::saveToFile(scene, path)) {
+      std::cerr << "Failed to save scene to " << path << "\n";
+    }
+  }
+
+  void ControlApp::loadSceneFromFile(const std::string &path) {
+    Scene scene{};
+    if (!SceneSerializer::loadFromFile(path, scene)) {
+      std::cerr << "Failed to load scene from " << path << "\n";
+      return;
+    }
+    importSceneSnapshot(scene);
+  }
 
   void ControlApp::run() {
 
@@ -97,6 +284,7 @@ namespace lve {
 
     auto &viewerObject = gameObjectManager.createGameObject();
     viewerObject.transform.translation.z = -2.5f;
+    viewerId = viewerObject.getId();
 
     KeyboardMovementController cameraController{};
     CharacterMovementController characterController{};
@@ -118,7 +306,12 @@ namespace lve {
       camera.setPerspectiveProjection(glm::radians(50.f), aspect, 0.1f, 100.f);
 
       // character update (2D sprite)
-      auto &character = gameObjectManager.gameObjects.at(characterId);
+      auto characterIt = gameObjectManager.gameObjects.find(characterId);
+      if (characterIt == gameObjectManager.gameObjects.end()) {
+        std::cerr << "Character object missing; cannot update\n";
+        continue;
+      }
+      auto &character = characterIt->second;
       characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
       spriteAnimator->applySpriteState(character, character.objState);
       const SpriteStateInfo* stateInfoPtr = nullptr;
@@ -155,6 +348,67 @@ namespace lve {
           normalViewEnabled);
 
         BuildCharacterPanel(character, *spriteAnimator);
+        auto hierarchyActions = editor::BuildHierarchyPanel(gameObjectManager, hierarchyState, characterId);
+        auto sceneActions = editor::BuildScenePanel(scenePanelState);
+        LveGameObject *selectedObj = nullptr;
+        if (hierarchyState.selectedId) {
+          auto itSel = gameObjectManager.gameObjects.find(*hierarchyState.selectedId);
+          if (itSel != gameObjectManager.gameObjects.end()) {
+            selectedObj = &itSel->second;
+          }
+        }
+        editor::BuildInspectorPanel(
+          selectedObj,
+          spriteAnimator.get(),
+          camera.getView(),
+          camera.getProjection(),
+          lveWindow.getExtent());
+
+        glm::vec3 spawnForward{0.f, 0.f, -1.f};
+        {
+          glm::mat4 invView = camera.getInverseView();
+          glm::vec3 forward{-invView[2][0], -invView[2][1], -invView[2][2]};
+          if (glm::length(forward) > 0.0001f) {
+            spawnForward = glm::normalize(forward);
+          }
+        }
+        const glm::vec3 spawnPos = viewerObject.transform.translation + spawnForward * 2.f;
+
+        switch (hierarchyActions.createRequest) {
+          case editor::HierarchyCreateRequest::Sprite: {
+            auto &obj = createSpriteObject(spawnPos, ObjectState::IDLE, false);
+            hierarchyState.selectedId = obj.getId();
+            break;
+          }
+          case editor::HierarchyCreateRequest::Mesh: {
+            auto &obj = createMeshObject(spawnPos);
+            hierarchyState.selectedId = obj.getId();
+            break;
+          }
+          case editor::HierarchyCreateRequest::PointLight: {
+            auto &obj = createPointLightObject(spawnPos);
+            hierarchyState.selectedId = obj.getId();
+            break;
+          }
+          case editor::HierarchyCreateRequest::None:
+          default: break;
+        }
+
+        if (hierarchyActions.deleteSelected &&
+            hierarchyState.selectedId &&
+            *hierarchyState.selectedId != characterId) {
+          if (gameObjectManager.destroyGameObject(*hierarchyState.selectedId)) {
+            hierarchyState.selectedId.reset();
+          }
+        }
+
+        if (sceneActions.saveRequested) {
+          saveSceneToFile(scenePanelState.path);
+        }
+        if (sceneActions.loadRequested) {
+          vkDeviceWaitIdle(lveDevice.device());
+          loadSceneFromFile(scenePanelState.path);
+        }
 
         simpleRenderSystem.setWireframe(wireframeEnabled);
         simpleRenderSystem.setNormalView(normalViewEnabled);
@@ -227,16 +481,10 @@ namespace lve {
 
   void ControlApp::loadGameObjects() {
 
-    std::shared_ptr<LveModel> lveModel = LveModel::createModelFromFile(lveDevice, "Assets/models/colored_cube.obj");
+    cubeModel = LveModel::createModelFromFile(lveDevice, "Assets/models/colored_cube.obj");
+    spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");
 
-    auto &gameObj = gameObjectManager.createGameObject();
-    gameObj.model = lveModel;
-    gameObj.enableTextureType = 0;
-    gameObj.transform.translation = {-.5f, .5f, 0.f};
-    gameObj.transform.scale = glm::vec3(1.f);
-
-    // 2D sprite character (quad + texture atlas)
-    std::shared_ptr<LveModel> spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");
+    createMeshObject({-.5f, .5f, 0.f});
 
     if (!loadSpriteMetadata("Assets/textures/characters/player.json", playerMeta)) {
       std::cerr << "Failed to load player sprite metadata; using defaults\n";
@@ -252,15 +500,7 @@ namespace lve {
     }
     spriteAnimator = std::make_unique<SpriteAnimator>(lveDevice, playerMeta);
 
-    auto &characterObj = gameObjectManager.createGameObject();
-    characterObj.model = spriteModel;
-    characterObj.enableTextureType = 1;
-    characterObj.isSprite = true;
-    characterObj.transform.translation = {0.f, 0.f, 0.f};
-    characterObj.transform.rotation = {0.f, 0.f, 0.f};
-    characterObj.billboardMode = BillboardMode::Cylindrical;
-    // characterObj.useOrthoCamera = true;
-    spriteAnimator->applySpriteState(characterObj, ObjectState::IDLE);
+    auto &characterObj = createSpriteObject({0.f, 0.f, 0.f}, ObjectState::IDLE, true);
     characterId = characterObj.getId();
     
     std::vector<glm::vec3> lightColors{

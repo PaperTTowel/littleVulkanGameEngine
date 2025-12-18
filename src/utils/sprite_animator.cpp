@@ -49,6 +49,7 @@ namespace lve {
 
     character.spriteStates.clear();
     character.spriteStates[static_cast<int>(desiredState)] = stateInfo;
+    character.spriteStateName = stateKey;
 
     float aspect = (metadata.size.y != 0.f) ? (metadata.size.x / metadata.size.y) : 1.f;
     character.transform.scale = glm::vec3(aspect, 1.f, 1.f);

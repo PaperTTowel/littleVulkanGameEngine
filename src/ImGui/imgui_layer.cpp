@@ -74,14 +74,31 @@ void ImGuiLayer::buildUI(
   bool &wireframeEnabled,
   bool &normalViewEnabled) {
 
-  const float frameMs = frameTime * 1000.f;
-  frameTimeHistory[frameTimeOffset % frameTimeHistory.size()] = frameMs;
+  const float frameMsNow = frameTime * 1000.f;
+  frameTimeHistory[frameTimeOffset % frameTimeHistory.size()] = frameMsNow;
   frameTimeOffset++;
-  const float fps = frameTime > 0.f ? 1.f / frameTime : 0.f;
+
+  // throttle FPS/frame text update to ~1 Hz
+  static float accumTime = 0.f;
+  static float accumFrameMs = 0.f;
+  static int accumCount = 0;
+  static float displayFps = 0.f;
+  static float displayFrameMs = 0.f;
+
+  accumTime += frameTime;
+  accumFrameMs += frameMsNow;
+  accumCount++;
+  if (accumTime >= 1.0f) {
+    displayFps = accumCount > 0 ? (accumCount / accumTime) : 0.f;
+    displayFrameMs = accumCount > 0 ? (accumFrameMs / accumCount) : 0.f;
+    accumTime = 0.f;
+    accumFrameMs = 0.f;
+    accumCount = 0;
+  }
 
   ImGui::Begin("Engine Stats");
-  ImGui::Text("FPS: %.1f", fps);
-  ImGui::Text("Frame: %.2f ms", frameMs);
+  ImGui::Text("FPS: %.1f", displayFps);
+  ImGui::Text("Frame: %.2f ms", displayFrameMs);
   ImGui::PlotLines(
     "Frame time (ms)",
     frameTimeHistory.data(),
