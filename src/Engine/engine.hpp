@@ -11,11 +11,13 @@
 #include "Editor/inspector_panel.hpp"
 #include "Engine/scene.hpp"
 #include "Editor/scene_panel.hpp"
+#include "Editor/resource_browser_panel.hpp"
 
 // std
 #include <memory>
 #include <optional>
 #include <vector>
+#include <unordered_map>
 
 namespace lve {
   class ControlApp {
@@ -38,7 +40,9 @@ namespace lve {
       ObjectState state = ObjectState::IDLE,
       bool useOrtho = true,
       const std::string &metaPath = "Assets/textures/characters/player.json");
-    LveGameObject &createMeshObject(const glm::vec3 &position);
+    LveGameObject &createMeshObject(
+      const glm::vec3 &position,
+      const std::string &modelPath = "Assets/models/colored_cube.obj");
     LveGameObject &createPointLightObject(const glm::vec3 &position);
     Scene exportSceneSnapshot() const;
     void importSceneSnapshot(const Scene &scene);
@@ -46,6 +50,8 @@ namespace lve {
     void loadSceneFromFile(const std::string &path);
     static ObjectState objectStateFromString(const std::string &name);
     static std::string objectStateToString(ObjectState state);
+    std::shared_ptr<LveModel> loadModelCached(const std::string &path);
+    bool setActiveSpriteMetadata(const std::string &path);
 
     LveWindow lveWindow{WIDTH, HEIGHT, "Hello Vulkan!"};
     LveDevice lveDevice{lveWindow};
@@ -63,7 +69,9 @@ namespace lve {
     std::unique_ptr<SpriteAnimator> spriteAnimator;
     std::shared_ptr<LveModel> cubeModel;
     std::shared_ptr<LveModel> spriteModel;
+    std::unordered_map<std::string, std::shared_ptr<LveModel>> modelCache;
     editor::HierarchyPanelState hierarchyState;
     editor::ScenePanelState scenePanelState;
+    editor::ResourceBrowserState resourceBrowserState;
   };
 } // namespace lve

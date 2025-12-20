@@ -16,7 +16,10 @@ namespace lve::editor {
       } else if (obj.isSprite) {
         type = "Sprite";
       }
-      return "ID " + std::to_string(obj.getId()) + " (" + type + ")";
+      std::string displayName = obj.name.empty()
+        ? ("ID " + std::to_string(obj.getId()))
+        : obj.name;
+      return displayName + " (" + type + ") [ID " + std::to_string(obj.getId()) + "]";
     }
   } // namespace
 

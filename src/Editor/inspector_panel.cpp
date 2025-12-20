@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <cstdio>
 
 namespace lve::editor {
 
@@ -44,6 +45,11 @@ namespace lve::editor {
     }
 
     ImGui::Text("ID: %u", selected->getId());
+    char nameBuf[128];
+    std::snprintf(nameBuf, sizeof(nameBuf), "%s", selected->name.c_str());
+    if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
+      selected->name = nameBuf;
+    }
     ImGui::Text("Type: %s", typeLabel(*selected));
     ImGui::Separator();
 

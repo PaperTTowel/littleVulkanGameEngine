@@ -62,6 +62,7 @@ namespace lve {
     std::string spriteStateName;
     std::string modelPath;
     std::string materialPath;
+    std::string name;
 
     bool hasPhysics = false;
 
