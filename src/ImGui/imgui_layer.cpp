@@ -72,7 +72,8 @@ void ImGuiLayer::buildUI(
   const glm::vec3 &cameraPos,
   const glm::vec3 &cameraRot,
   bool &wireframeEnabled,
-  bool &normalViewEnabled) {
+  bool &normalViewEnabled,
+  bool &useOrthoCamera) {
 
   const float frameMsNow = frameTime * 1000.f;
   frameTimeHistory[frameTimeOffset % frameTimeHistory.size()] = frameMsNow;
@@ -116,6 +117,7 @@ void ImGuiLayer::buildUI(
   ImGui::Separator();
   ImGui::Checkbox("Wireframe", &wireframeEnabled);
   ImGui::Checkbox("Normal view (shader toggle)", &normalViewEnabled);
+  ImGui::Checkbox("Ortho camera", &useOrthoCamera);
 
   ImGui::End();
 }

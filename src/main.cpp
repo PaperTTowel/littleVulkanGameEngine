@@ -1,4 +1,4 @@
-#include "Engine/engine.hpp"
+#include "Engine/engine_loop.hpp"
 
 // std
 #include <cstdlib>
@@ -6,7 +6,7 @@
 #include <stdexcept>
 
 int main(){
-    lve::ControlApp app{};
+    lve::EngineLoop app{};
     
     try{
         app.run();

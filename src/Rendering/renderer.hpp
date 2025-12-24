@@ -36,6 +36,7 @@ namespace lve{
         void endFrame();
         void beginSwapChainRenderPass(VkCommandBuffer commandBuffer);
         void endSwapChainRenderPass(VkCommandBuffer commandBuffer);
+        bool wasSwapChainRecreated();
 
     private:
         void createCommandBuffers();
@@ -50,5 +51,6 @@ namespace lve{
         uint32_t currentImageIndex;
         int currentFrameIndex{0};
         bool isFrameStarted{false};
+        bool swapChainRecreated{false};
     };
 } // namespace lve

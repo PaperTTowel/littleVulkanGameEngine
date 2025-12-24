@@ -29,15 +29,6 @@ layout(set = 1, binding = 0) uniform GameObjectBufferData {
   mat4 normalMatrix;
 } gameObject;
 
-layout(push_constant) uniform Push {
-  mat4 modelMatrix;
-  mat4 normalMatrix;
-  int useTexture;
-  int currentFrame;
-  int objectState;
-  int direction;
-} push;
-
 void main() {
   vec4 positionWorld = gameObject.modelMatrix * vec4(position, 1.0);
   gl_Position = ubo.projection * ubo.view * positionWorld;

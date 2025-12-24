@@ -14,7 +14,6 @@ namespace lve {
 
   struct SpritePushConstantData {
     glm::mat4 modelMatrix{1.f};
-    glm::mat4 normalMatrix{1.f};
     int useTexture;
     int currentFrame;
     int objectState;
@@ -165,7 +164,6 @@ namespace lve {
 
       SpritePushConstantData push{};
       push.modelMatrix = modelMat;
-      push.normalMatrix = glm::mat4{1.f}; // normals unused for sprites
       push.useTexture = obj.enableTextureType;
       push.currentFrame = obj.currentFrame;
       push.objectState = static_cast<int>(obj.objState);

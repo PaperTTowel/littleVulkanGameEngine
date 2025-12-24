@@ -16,8 +16,6 @@
 namespace lve {
 
   struct SimplePushConstantData {
-    glm::mat4 modelMatrix{1.f};
-    glm::mat4 normalMatrix{1.f};
     int useTexture;
     int currentFrame;
     int objectState;
@@ -136,8 +134,6 @@ namespace lve {
         nullptr);
       
       SimplePushConstantData push{};
-      push.modelMatrix = obj.transform.mat4();
-      push.normalMatrix = obj.transform.normalMatrix();
       push.useTexture = obj.enableTextureType;
       push.currentFrame = obj.currentFrame;
       push.objectState = static_cast<int>(obj.objState);

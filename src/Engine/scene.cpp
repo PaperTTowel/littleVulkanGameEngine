@@ -171,7 +171,6 @@ namespace lve {
         ss << indent(level + 2) << "\"spriteMeta\": \"" << s.spriteMeta << "\",\n";
         ss << indent(level + 2) << "\"state\": \"" << s.state << "\",\n";
         ss << indent(level + 2) << "\"billboard\": \"" << toString(s.billboard) << "\",\n";
-        ss << indent(level + 2) << "\"useOrtho\": " << (s.useOrtho ? "true" : "false") << ",\n";
         ss << indent(level + 2) << "\"layer\": " << s.layer << "\n";
         ss << indent(level + 1) << "}";
       }
@@ -262,7 +261,6 @@ namespace lve {
         sc.spriteMeta = parseString(block, "spriteMeta", sc.spriteMeta);
         sc.state = parseString(block, "state", sc.state);
         sc.billboard = billboardFromString(parseString(block, "billboard", toString(sc.billboard)));
-        sc.useOrtho = parseBool(block, "useOrtho", sc.useOrtho);
         sc.layer = parseInt(block, "layer", sc.layer);
         e.sprite = sc;
       }

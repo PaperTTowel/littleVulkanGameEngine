@@ -156,7 +156,6 @@ namespace lve::editor {
       if (ImGui::Combo("Billboard", &mode, modeLabels, IM_ARRAYSIZE(modeLabels))) {
         selected->billboardMode = static_cast<BillboardMode>(mode);
       }
-      ImGui::Checkbox("Use Ortho", &selected->useOrthoCamera);
     }
 
     ImGui::End();

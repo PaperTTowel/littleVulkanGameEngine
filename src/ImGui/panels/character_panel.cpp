@@ -30,7 +30,6 @@ namespace lve {
       character.currentFrame = 0;
     }
 
-    ImGui::Checkbox("Ortho camera (sprites)", &character.useOrthoCamera);
     ImGui::Text("Billboard mode:");
     int mode = static_cast<int>(character.billboardMode);
     const char* modeLabels[] = { "None", "Cylindrical", "Spherical" };

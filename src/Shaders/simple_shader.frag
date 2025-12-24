@@ -24,8 +24,6 @@ layout (set = 0, binding = 0) uniform GlobalUbo {
 layout (set = 1, binding = 1) uniform sampler2D diffuseMap;
 
 layout(push_constant) uniform Push {
-  mat4 modelMatrix;
-  mat4 normalMatrix;
   int useTexture;   // 0 = vertex color, 1 = texture sample, 2 = texture with flip
   int currentFrame;
   int objectState;

@@ -53,7 +53,6 @@ namespace lve {
     Direction directions = Direction::RIGHT;
     bool isSprite = false; // mark objects that should render via 2D sprite pipeline
     BillboardMode billboardMode = BillboardMode::None;
-    bool useOrthoCamera = false;
     float animationTimeAccumulator = 0.0f;
     int atlasColumns{1};
     int atlasRows{1};

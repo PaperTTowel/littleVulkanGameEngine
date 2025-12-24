@@ -29,7 +29,6 @@ namespace lve {
     std::string spriteMeta;
     std::string state{"idle"};
     BillboardKind billboard{BillboardKind::Cylindrical};
-    bool useOrtho{true};
     int layer{0};
   };
 

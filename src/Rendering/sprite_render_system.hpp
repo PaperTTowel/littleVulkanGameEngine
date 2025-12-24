@@ -20,7 +20,6 @@ namespace lve {
     SpriteRenderSystem &operator=(const SpriteRenderSystem &) = delete;
 
     void renderSprites(FrameInfo &frameInfo);
-    void setUseOrthoCamera(bool enabled) { useOrthoCamera = enabled; }
     void setBillboardMode(BillboardMode mode) { billboardMode = mode; }
 
   private:
@@ -33,7 +32,6 @@ namespace lve {
     VkPipelineLayout pipelineLayout{VK_NULL_HANDLE};
 
     std::unique_ptr<LveDescriptorSetLayout> renderSystemLayout;
-    bool useOrthoCamera{false};
     BillboardMode billboardMode{BillboardMode::None};
   };
 } // namespace lve

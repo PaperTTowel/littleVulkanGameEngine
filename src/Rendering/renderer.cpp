@@ -21,6 +21,7 @@ namespace lve {
       glfwWaitEvents();
     }
     vkDeviceWaitIdle(lveDevice.device());
+    swapChainRecreated = true;
 
     if (lveSwapChain == nullptr) {
       lveSwapChain = std::make_unique<LveSwapChain>(lveDevice, extent);
@@ -32,6 +33,14 @@ namespace lve {
         throw std::runtime_error("Swap chain image(or depth) format has changed!");
       }
     }
+  }
+
+  bool LveRenderer::wasSwapChainRecreated() {
+    if (swapChainRecreated) {
+      swapChainRecreated = false;
+      return true;
+    }
+    return false;
   }
 
   void LveRenderer::createCommandBuffers() {
