@@ -88,7 +88,10 @@ namespace lve {
       auto &character = characterIt->second;
       characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
       if (spriteAnimator) {
-        spriteAnimator->applySpriteState(character, character.objState);
+        const char *stateName = (character.objState == ObjectState::WALKING) ? "walking" : "idle";
+        if (character.spriteStateName != stateName || !character.diffuseMap) {
+          spriteAnimator->applySpriteState(character, character.objState);
+        }
       }
       const SpriteStateInfo* stateInfoPtr = nullptr;
       auto stateIt = character.spriteStates.find(static_cast<int>(character.objState));
@@ -232,13 +235,6 @@ namespace lve {
         ubo.inverseView = camera.getInverseView();
         renderContext.pointLightSystem().update(frameInfo, ubo);
         renderContext.updateGlobalUbo(frameInfo.frameIndex, ubo);
-
-        // update physics engine (add soon)
-        std::vector<LveGameObject*> objPtrs;
-        objPtrs.reserve(gameObjectManager.gameObjects.size());
-        for (auto& [id, obj] : gameObjectManager.gameObjects) {
-            objPtrs.push_back(&obj);
-        }
 
         // final step of update is updating the game objects buffer data
         // The render functions MUST not change a game objects transform data

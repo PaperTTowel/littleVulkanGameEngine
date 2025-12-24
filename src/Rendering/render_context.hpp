@@ -2,6 +2,7 @@
 
 #include "Engine/Backend/descriptors.hpp"
 #include "Engine/Backend/device.hpp"
+#include "Engine/Backend/buffer.hpp"
 #include "Rendering/frame_info.hpp"
 #include "Rendering/point_light_system.hpp"
 #include "Rendering/renderer.hpp"

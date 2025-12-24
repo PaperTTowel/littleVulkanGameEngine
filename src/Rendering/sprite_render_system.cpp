@@ -74,6 +74,7 @@ namespace lve {
     LvePipeline::defaultPipelineConfigInfo(config);
     config.renderPass = renderPass;
     config.pipelineLayout = pipelineLayout;
+    config.rasterizationInfo.cullMode = VK_CULL_MODE_NONE;
 
     // enable alpha blending for sprites
     config.colorBlendAttachment.blendEnable = VK_TRUE;
@@ -157,9 +158,7 @@ namespace lve {
         glm::mat4 translate{1.f};
         translate[3] = glm::vec4(obj.transform.translation, 1.f);
         glm::mat4 scale = glm::scale(glm::mat4{1.f}, obj.transform.scale);
-        // flip around X to correct upside-down when billboarded
-        glm::mat4 flipX = glm::rotate(glm::mat4{1.f}, glm::pi<float>(), glm::vec3(1.f, 0.f, 0.f));
-        modelMat = translate * rotation * flipX * scale;
+        modelMat = translate * rotation * scale;
       }
 
       SpritePushConstantData push{};

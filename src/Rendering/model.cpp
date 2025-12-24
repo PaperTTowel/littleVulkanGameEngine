@@ -1,16 +1,19 @@
-#include "Rendering/model.hpp"
+﻿#include "Rendering/model.hpp"
 
 #include "utils/utils.hpp"
 
 // libs
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
+#include <assimp/Importer.hpp>
+#include <assimp/material.h>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
 
 // std
 #include <cassert>
 #include <cstring>
+#include <stdexcept>
 #include <unordered_map>
 
 #ifndef ENGINE_DIR
@@ -155,79 +158,76 @@ namespace lve {
   }
 
   void LveModel::Builder::loadModel(const std::string &filepath) {
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn, err;
-    std::string mtlBaseDir = filepath.substr(0, filepath.find_last_of('/') + 1); // MTL 파일 경로
-
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.c_str(), mtlBaseDir.c_str(), true)) {
-      throw std::runtime_error(warn + err);
+    Assimp::Importer importer;
+    const aiScene *scene = importer.ReadFile(
+      filepath,
+      aiProcess_Triangulate |
+        aiProcess_GenNormals |
+        aiProcess_JoinIdenticalVertices |
+        aiProcess_FlipUVs);
+    if (!scene || !scene->mRootNode) {
+      throw std::runtime_error(importer.GetErrorString());
     }
 
     vertices.clear();
     indices.clear();
 
     std::unordered_map<Vertex, uint32_t> uniqueVertices{};
-    for (const auto &shape : shapes) {
-      auto materialIt = shape.mesh.material_ids.begin();
-      for (const auto &index : shape.mesh.indices) {
-        Vertex vertex{};
+    for (unsigned int meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
+      const aiMesh *mesh = scene->mMeshes[meshIndex];
+      const aiMaterial *material = nullptr;
+      if (mesh->mMaterialIndex < scene->mNumMaterials) {
+        material = scene->mMaterials[mesh->mMaterialIndex];
+      }
 
-        if (index.vertex_index >= 0) {
-          vertex.position = {
-              attrib.vertices[3 * index.vertex_index + 0],
-              attrib.vertices[3 * index.vertex_index + 1],
-              attrib.vertices[3 * index.vertex_index + 2],
-          };
+      for (unsigned int faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
+        const aiFace &face = mesh->mFaces[faceIndex];
+        if (face.mNumIndices != 3) {
+          continue;
+        }
+        for (unsigned int i = 0; i < face.mNumIndices; ++i) {
+          unsigned int index = face.mIndices[i];
+          Vertex vertex{};
 
-          if (!materials.empty() && materialIt != shape.mesh.material_ids.end() && *materialIt >= 0){
-            int materialIndex = *materialIt;
+          if (mesh->HasPositions()) {
+            const aiVector3D &pos = mesh->mVertices[index];
+            vertex.position = {pos.x, pos.y, pos.z};
+          }
 
-            vertex.color = {
-                materials[materialIndex].diffuse[0],
-                materials[materialIndex].diffuse[1],
-                materials[materialIndex].diffuse[2],
-            };
+          if (mesh->HasNormals()) {
+            const aiVector3D &n = mesh->mNormals[index];
+            vertex.normal = {n.x, n.y, n.z};
+          }
 
-            /*
-            if (!material[materialIndex].diffuse_texname.empty()) {
-                textureFilePath = baseDir + material[materialIndex].diffuse_texname;
+          if (mesh->HasTextureCoords(0)) {
+            const aiVector3D &uv = mesh->mTextureCoords[0][index];
+            vertex.uv = {uv.x, uv.y};
+          }
+
+          if (mesh->HasVertexColors(0)) {
+            const aiColor4D &c = mesh->mColors[0][index];
+            vertex.color = {c.r, c.g, c.b};
+          } else if (material) {
+            aiColor4D diffuse;
+            if (aiGetMaterialColor(material, AI_MATKEY_COLOR_DIFFUSE, &diffuse) == AI_SUCCESS) {
+              vertex.color = {diffuse.r, diffuse.g, diffuse.b};
+            } else {
+              vertex.color = {1.0f, 1.0f, 1.0f};
             }
-            */
-          } else if (attrib.colors.size() >= (3 * index.vertex_index + 3)) {
-            vertex.color = {
-              attrib.colors[3 * index.vertex_index + 0],
-              attrib.colors[3 * index.vertex_index + 1],
-              attrib.colors[3 * index.vertex_index + 2],
-            };
           } else {
             vertex.color = {1.0f, 1.0f, 1.0f};
           }
-        }
 
-        if (index.normal_index >= 0) {
-          vertex.normal = {
-              attrib.normals[3 * index.normal_index + 0],
-              attrib.normals[3 * index.normal_index + 1],
-              attrib.normals[3 * index.normal_index + 2],
-          };
+          if (uniqueVertices.count(vertex) == 0) {
+            uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+            vertices.push_back(vertex);
+          }
+          indices.push_back(uniqueVertices[vertex]);
         }
-
-        if (index.texcoord_index >= 0) {
-          vertex.uv = {
-              attrib.texcoords[2 * index.texcoord_index + 0],
-              attrib.texcoords[2 * index.texcoord_index + 1],
-          };
-        }
-
-        if (uniqueVertices.count(vertex) == 0) {
-          uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-          vertices.push_back(vertex);
-        }
-        indices.push_back(uniqueVertices[vertex]);
       }
     }
   }
 
 }  // namespace lve
+
+

@@ -9,7 +9,8 @@
 // std
 #include <array>
 #include <cassert>
-#include <map>
+#include <algorithm>
+#include <vector>
 #include <stdexcept>
 
 namespace lve{
@@ -92,17 +93,22 @@ namespace lve{
     }
 
     void PointLightSystem::render(FrameInfo &frameInfo){
-        // sort lights
-        std::map<float, LveGameObject::id_t> sorted;
-        for(auto& kv : frameInfo.gameObjects){
-            auto& obj = kv.second;
-            if(obj.pointLight == nullptr) continue;
+        // sort lights by distance (back-to-front)
+        std::vector<std::pair<float, LveGameObject::id_t>> sorted;
+        sorted.reserve(frameInfo.gameObjects.size());
+        for (auto &kv : frameInfo.gameObjects) {
+            auto &obj = kv.second;
+            if (obj.pointLight == nullptr) continue;
 
-            // calculate distance
             auto offset = frameInfo.camera.getPosition() - obj.transform.translation;
             float disSquared = glm::dot(offset, offset);
-            sorted[disSquared] = obj.getId();
+            sorted.emplace_back(disSquared, obj.getId());
         }
+        std::sort(sorted.begin(), sorted.end(),
+            [](const auto &a, const auto &b) {
+                if (a.first != b.first) return a.first < b.first;
+                return a.second < b.second;
+            });
 
         lvePipeline->bind(frameInfo.commandBuffer);
 
@@ -118,7 +124,7 @@ namespace lve{
         );
 
         // iterate through sorted lights in reverse order
-        for(auto it = sorted.rbegin(); it != sorted.rend(); ++it){
+        for (auto it = sorted.rbegin(); it != sorted.rend(); ++it) {
             // use game obj id to find light object
             auto& obj = frameInfo.gameObjects.at(it->second);
 

@@ -5,15 +5,15 @@
 #include <iostream>
 #include <stdexcept>
 
-int main(){
-    lve::EngineLoop app{};
-    
-    try{
-        app.run();
-    } catch(const std::exception &e) {
-        std::cerr << e.what() << '\n';
-        return EXIT_FAILURE;
-    }
+int main() {
+  lve::EngineLoop app{};
 
-    return EXIT_SUCCESS;
+  try {
+    app.run();
+  } catch (const std::exception &e) {
+    std::cerr << e.what() << '\n';
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
 }

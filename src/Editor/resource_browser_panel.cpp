@@ -55,7 +55,7 @@ namespace lve::editor {
     const LveGameObject *selected) {
 
     if (state.pendingRefresh) {
-      scanDirectory("Assets/models", {".obj"}, state.meshFiles);
+      scanDirectory("Assets/models", {".obj", ".fbx", ".gltf", ".glb"}, state.meshFiles);
       scanDirectory("Assets", {".json"}, state.spriteMetaFiles);
       state.pendingRefresh = false;
       if (state.selectedMesh >= static_cast<int>(state.meshFiles.size())) {
@@ -75,7 +75,7 @@ namespace lve::editor {
     }
 
     ImGui::Separator();
-    ImGui::TextUnformatted("Meshes (.obj)");
+    ImGui::TextUnformatted("Meshes (.obj/.fbx/.gltf/.glb)");
     ImGui::Text("Active: %s", state.activeMeshPath.c_str());
 
     ImGui::BeginChild("MeshList", ImVec2(0, 160), true);
