@@ -114,13 +114,20 @@ namespace lve {
       if (!obj.isSprite) continue;
       if (obj.model == nullptr) continue;
 
-      auto bufferInfo = obj.getBufferInfo(frameInfo.frameIndex);
-      auto imageInfo = obj.diffuseMap->getImageInfo();
-      VkDescriptorSet descriptorSet;
-      LveDescriptorWriter(*renderSystemLayout, frameInfo.frameDescriptorPool)
-        .writeBuffer(0, &bufferInfo)
-        .writeImage(1, &imageInfo)
-        .build(descriptorSet);
+      const int frameIndex = frameInfo.frameIndex;
+      VkDescriptorSet &descriptorSet = obj.descriptorSets[frameIndex];
+      const LveTexture *currentTexture = obj.diffuseMap.get();
+      if (descriptorSet == VK_NULL_HANDLE || obj.descriptorTextures[frameIndex] != currentTexture) {
+        auto bufferInfo = obj.getBufferInfo(frameIndex);
+        auto imageInfo = obj.diffuseMap->getImageInfo();
+        VkDescriptorSet newSet{};
+        LveDescriptorWriter(*renderSystemLayout, frameInfo.frameDescriptorPool)
+          .writeBuffer(0, &bufferInfo)
+          .writeImage(1, &imageInfo)
+          .build(newSet);
+        descriptorSet = newSet;
+        obj.descriptorTextures[frameIndex] = currentTexture;
+      }
 
       vkCmdBindDescriptorSets(
         frameInfo.commandBuffer,

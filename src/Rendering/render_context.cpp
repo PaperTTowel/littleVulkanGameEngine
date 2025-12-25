@@ -1,5 +1,7 @@
 #include "render_context.hpp"
 
+#include "utils/game_object.hpp"
+
 // std
 #include <stdexcept>
 
@@ -18,15 +20,14 @@ namespace lve {
       .addPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, LveSwapChain::MAX_FRAMES_IN_FLIGHT)
       .build();
 
-    framePools.resize(LveSwapChain::MAX_FRAMES_IN_FLIGHT);
-    auto framePoolBuilder = LveDescriptorPool::Builder(lveDevice)
-      .setMaxSets(1000)
-      .addPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000)
-      .addPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000)
-      .setPoolFlags(VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
-    for (int i = 0; i < framePools.size(); i++) {
-      framePools[i] = framePoolBuilder.build();
-    }
+    const uint32_t maxObjectSets =
+      LveGameObjectManager::MAX_GAME_OBJECTS * LveSwapChain::MAX_FRAMES_IN_FLIGHT;
+    objectDescriptorPool = LveDescriptorPool::Builder(lveDevice)
+      .setMaxSets(maxObjectSets)
+      .addPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, maxObjectSets)
+      .addPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, maxObjectSets)
+      .setPoolFlags(VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT)
+      .build();
 
     uboBuffers.resize(LveSwapChain::MAX_FRAMES_IN_FLIGHT);
     for (int i = 0; i < uboBuffers.size(); i++) {
@@ -104,14 +105,13 @@ namespace lve {
 
   FrameInfo RenderContext::makeFrameInfo(float frameTime, LveCamera &camera, LveGameObject::Map &gameObjects, VkCommandBuffer commandBuffer) {
     int frameIndex = lveRenderer.getFrameindex();
-    framePools[frameIndex]->resetPool();
     return FrameInfo{
       frameIndex,
       frameTime,
       commandBuffer,
       camera,
       globalDescriptorSets[frameIndex],
-      *framePools[frameIndex],
+      *objectDescriptorPool,
       gameObjects};
   }
 

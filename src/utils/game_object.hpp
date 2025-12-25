@@ -13,6 +13,7 @@
 #include <string>
 #include <memory>
 #include <optional>
+#include <array>
 #include <unordered_map>
 
 namespace lve {
@@ -64,6 +65,9 @@ namespace lve {
     std::string name;
 
     bool hasPhysics = false;
+    bool transformDirty{true};
+    std::array<VkDescriptorSet, LveSwapChain::MAX_FRAMES_IN_FLIGHT> descriptorSets{};
+    std::array<const LveTexture*, LveSwapChain::MAX_FRAMES_IN_FLIGHT> descriptorTextures{};
 
     LveGameObject(LveGameObject &&) = default;
     LveGameObject(const LveGameObject &) = delete;

@@ -74,6 +74,7 @@ namespace lve {
     obj.billboardMode = BillboardMode::None;
     obj.transform.translation = position;
     obj.transform.scale = glm::vec3(1.f);
+    obj.transformDirty = true;
     return obj;
   }
 
@@ -91,6 +92,7 @@ namespace lve {
     obj.transform.translation = position;
     obj.transform.rotation = {0.f, 0.f, 0.f};
     obj.objState = state;
+    obj.transformDirty = true;
     if (spriteAnimator) {
       spriteAnimator->applySpriteState(obj, state);
     }
@@ -101,6 +103,7 @@ namespace lve {
     auto &light = gameObjectManager.makePointLight(0.2f);
     light.name = "PointLight " + std::to_string(light.getId());
     light.transform.translation = position;
+    light.transformDirty = true;
     return light;
   }
 
@@ -189,6 +192,7 @@ namespace lve {
           light.pointLight->lightIntensity = e.light->intensity;
         }
         light.name = !e.name.empty() ? e.name : "PointLight " + std::to_string(light.getId());
+        light.transformDirty = true;
         continue;
       }
 
@@ -200,6 +204,7 @@ namespace lve {
         obj.name = !e.name.empty() ? e.name : "Sprite " + std::to_string(obj.getId());
         obj.billboardMode = (e.sprite->billboard == BillboardKind::Spherical) ? BillboardMode::Spherical
           : (e.sprite->billboard == BillboardKind::Cylindrical ? BillboardMode::Cylindrical : BillboardMode::None);
+        obj.transformDirty = true;
         if (!characterAssigned) {
           characterId = obj.getId();
           characterAssigned = true;
@@ -212,6 +217,7 @@ namespace lve {
         obj.transform.rotation = e.transform.rotation;
         obj.transform.scale = e.transform.scale;
         obj.name = !e.name.empty() ? e.name : "Mesh " + std::to_string(obj.getId());
+        obj.transformDirty = true;
         continue;
       }
     }

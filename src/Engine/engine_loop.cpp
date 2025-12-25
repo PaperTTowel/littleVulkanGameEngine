@@ -61,6 +61,7 @@ namespace lve {
       
       // camera
       cameraController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, viewerObject);
+      viewerObject.transformDirty = true;
       camera.setViewYXZ(viewerObject.transform.translation, viewerObject.transform.rotation);
 
       float aspect = lveRenderer.getAspectRatio();
@@ -87,6 +88,7 @@ namespace lve {
       }
       auto &character = characterIt->second;
       characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
+      character.transformDirty = true;
       if (spriteAnimator) {
         const char *stateName = (character.objState == ObjectState::WALKING) ? "walking" : "idle";
         if (character.spriteStateName != stateName || !character.diffuseMap) {
@@ -189,16 +191,19 @@ namespace lve {
           case editor::HierarchyCreateRequest::Sprite: {
             auto &obj = sceneSystem.createSpriteObject(spawnPos, ObjectState::IDLE, spriteMetaForNew);
             editorSystem.setSelectedId(obj.getId());
+            obj.transformDirty = true;
             break;
           }
           case editor::HierarchyCreateRequest::Mesh: {
             auto &obj = sceneSystem.createMeshObject(spawnPos, meshPathForNew);
             editorSystem.setSelectedId(obj.getId());
+            obj.transformDirty = true;
             break;
           }
           case editor::HierarchyCreateRequest::PointLight: {
             auto &obj = sceneSystem.createPointLightObject(spawnPos);
             editorSystem.setSelectedId(obj.getId());
+            obj.transformDirty = true;
             break;
           }
           case editor::HierarchyCreateRequest::None:

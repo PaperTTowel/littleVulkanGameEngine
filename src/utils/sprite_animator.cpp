@@ -53,6 +53,7 @@ namespace lve {
 
     float aspect = (metadata.size.y != 0.f) ? (metadata.size.x / metadata.size.y) : 1.f;
     character.transform.scale = glm::vec3(aspect, 1.f, 1.f);
+    character.transformDirty = true;
 
     if (desiredState != currentState) {
       character.currentFrame = 0;

@@ -41,7 +41,7 @@ namespace lve {
     LveRenderer &lveRenderer;
 
     std::unique_ptr<LveDescriptorPool> globalPool{};
-    std::vector<std::unique_ptr<LveDescriptorPool>> framePools;
+    std::unique_ptr<LveDescriptorPool> objectDescriptorPool{};
     std::vector<std::unique_ptr<LveBuffer>> uboBuffers;
     std::unique_ptr<LveDescriptorSetLayout> globalSetLayout;
     std::vector<VkDescriptorSet> globalDescriptorSets;

@@ -55,9 +55,13 @@ namespace lve::editor {
 
     // Transform
     ImGui::Text("Transform");
-    ImGui::DragFloat3("Position", &selected->transform.translation.x, 0.05f);
-    ImGui::DragFloat3("Rotation (rad)", &selected->transform.rotation.x, 0.05f);
-    ImGui::DragFloat3("Scale", &selected->transform.scale.x, 0.05f, 0.001f, 100.f);
+    bool transformEdited = false;
+    transformEdited |= ImGui::DragFloat3("Position", &selected->transform.translation.x, 0.05f);
+    transformEdited |= ImGui::DragFloat3("Rotation (rad)", &selected->transform.rotation.x, 0.05f);
+    transformEdited |= ImGui::DragFloat3("Scale", &selected->transform.scale.x, 0.05f, 0.001f, 100.f);
+    if (transformEdited) {
+      selected->transformDirty = true;
+    }
 
     // Gizmo controls
     static ImGuizmo::OPERATION op = ImGuizmo::TRANSLATE;
@@ -108,6 +112,7 @@ namespace lve::editor {
       selected->transform.translation = glm::vec3{trans[0], trans[1], trans[2]};
       selected->transform.rotation = glm::radians(glm::vec3{rotDeg[0], rotDeg[1], rotDeg[2]});
       selected->transform.scale = glm::vec3{scale[0], scale[1], scale[2]};
+      selected->transformDirty = true;
     }
 
     if (selected->pointLight) {

@@ -126,14 +126,26 @@ namespace lve {
   void LveGameObjectManager::updateBuffer(int frameIndex) {
     // copy model matrix and normal matrix for each gameObj into
     // buffer for this frame
+    bool anyDirty = false;
     for (auto &kv : gameObjects) {
       auto &obj = kv.second;
+      if (!obj.transformDirty) {
+        continue;
+      }
       GameObjectBufferData data{};
       data.modelMatrix = obj.transform.mat4();
       data.normalMatrix = obj.transform.normalMatrix();
-      uboBuffers[frameIndex]->writeToIndex(&data, kv.first);
+      for (auto &buffer : uboBuffers) {
+        buffer->writeToIndex(&data, kv.first);
+      }
+      obj.transformDirty = false;
+      anyDirty = true;
     }
-    uboBuffers[frameIndex]->flush();
+    if (anyDirty) {
+      for (auto &buffer : uboBuffers) {
+        buffer->flush();
+      }
+    }
   }
 
   VkDescriptorBufferInfo LveGameObject::getBufferInfo(int frameIndex) {

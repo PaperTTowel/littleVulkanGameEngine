@@ -113,15 +113,20 @@ namespace lve {
       if (obj.isSprite) continue;
       if (obj.model == nullptr) continue;
 
-      // writing descriptor set each frame can slow performance
-      // would be more efficient to implement some sort of caching
-      auto bufferInfo = obj.getBufferInfo(frameInfo.frameIndex);
-      auto imageInfo = obj.diffuseMap->getImageInfo();
-      VkDescriptorSet gameObjectDescriptorSet;
-      LveDescriptorWriter(*renderSystemLayout, frameInfo.frameDescriptorPool)
-        .writeBuffer(0, &bufferInfo)
-        .writeImage(1, &imageInfo)
-        .build(gameObjectDescriptorSet);
+      const int frameIndex = frameInfo.frameIndex;
+      VkDescriptorSet &gameObjectDescriptorSet = obj.descriptorSets[frameIndex];
+      const LveTexture *currentTexture = obj.diffuseMap.get();
+      if (gameObjectDescriptorSet == VK_NULL_HANDLE || obj.descriptorTextures[frameIndex] != currentTexture) {
+        auto bufferInfo = obj.getBufferInfo(frameIndex);
+        auto imageInfo = obj.diffuseMap->getImageInfo();
+        VkDescriptorSet newSet{};
+        LveDescriptorWriter(*renderSystemLayout, frameInfo.frameDescriptorPool)
+          .writeBuffer(0, &bufferInfo)
+          .writeImage(1, &imageInfo)
+          .build(newSet);
+        gameObjectDescriptorSet = newSet;
+        obj.descriptorTextures[frameIndex] = currentTexture;
+      }
 
       vkCmdBindDescriptorSets(
         frameInfo.commandBuffer,
