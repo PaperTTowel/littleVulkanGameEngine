@@ -5,9 +5,16 @@
 
 namespace lve::editor {
 
-  ScenePanelActions BuildScenePanel(ScenePanelState &state) {
+  ScenePanelActions BuildScenePanel(ScenePanelState &state, bool *open) {
     ScenePanelActions actions{};
-    ImGui::Begin("Scene");
+    if (open) {
+      if (!ImGui::Begin("Scene", open)) {
+        ImGui::End();
+        return actions;
+      }
+    } else {
+      ImGui::Begin("Scene");
+    }
     char buffer[256];
     std::snprintf(buffer, sizeof(buffer), "%s", state.path.c_str());
     if (ImGui::InputText("Path", buffer, sizeof(buffer))) {

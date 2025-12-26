@@ -26,10 +26,18 @@ namespace lve::editor {
   HierarchyActions BuildHierarchyPanel(
     LveGameObjectManager &manager,
     HierarchyPanelState &state,
-    LveGameObject::id_t protectedId) {
+    LveGameObject::id_t protectedId,
+    bool *open) {
 
     HierarchyActions actions{};
-    ImGui::Begin("Hierarchy");
+    if (open) {
+      if (!ImGui::Begin("Hierarchy", open)) {
+        ImGui::End();
+        return actions;
+      }
+    } else {
+      ImGui::Begin("Hierarchy");
+    }
 
     // ensure selected id is still valid
     if (state.selectedId.has_value()) {

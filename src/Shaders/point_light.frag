@@ -32,5 +32,6 @@ void main() {
   }
 
   float cosDis = 0.5 * (cos(dis * M_PI) + 1.0); // ranges from 1 -> 0
-  outColor = vec4(push.color.xyz + cosDis, 0.5 * cosDis);
+  vec3 color = push.color.xyz * (push.color.w * cosDis);
+  outColor = vec4(color, 1.0);
 }

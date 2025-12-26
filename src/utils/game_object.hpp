@@ -112,9 +112,15 @@ namespace lve {
       gameObjects.emplace(gameObjectId, std::move(gameObject));
       return gameObjects.at(gameObjectId);
     }
+    LveGameObject &createGameObjectWithId(LveGameObject::id_t id);
 
     LveGameObject &makePointLight(
       float intensity = 10.f, float radius = 0.1f, glm::vec3 color = glm::vec3(1.f));
+    LveGameObject &makePointLightWithId(
+      LveGameObject::id_t id,
+      float intensity = 10.f,
+      float radius = 0.1f,
+      glm::vec3 color = glm::vec3(1.f));
     bool destroyGameObject(LveGameObject::id_t id);
     void clearAll();
     void clearAllExcept(std::optional<LveGameObject::id_t> protectedId);

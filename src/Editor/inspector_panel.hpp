@@ -8,11 +8,40 @@
 
 namespace lve::editor {
 
-  void BuildInspectorPanel(
+  struct GizmoContext {
+    void *drawList{nullptr};
+    float x{0.f};
+    float y{0.f};
+    float width{0.f};
+    float height{0.f};
+    bool valid{false};
+  };
+
+  struct TransformSnapshot {
+    glm::vec3 translation{};
+    glm::vec3 rotation{};
+    glm::vec3 scale{1.f};
+  };
+
+  struct InspectorActions {
+    bool transformChanged{false};
+    bool transformCommitted{false};
+    TransformSnapshot beforeTransform{};
+    TransformSnapshot afterTransform{};
+    bool nameChanged{false};
+    std::string beforeName{};
+    std::string afterName{};
+  };
+
+  InspectorActions BuildInspectorPanel(
     LveGameObject *selected,
     SpriteAnimator *animator,
     const glm::mat4 &view,
     const glm::mat4 &projection,
-    VkExtent2D viewportExtent);
+    VkExtent2D viewportExtent,
+    bool *open,
+    const GizmoContext &gizmoContext,
+    int gizmoOperation,
+    int gizmoMode);
 
 } // namespace lve::editor

@@ -16,8 +16,9 @@ public:
 
   void init(VkRenderPass renderPass, uint32_t imageCount = LveSwapChain::MAX_FRAMES_IN_FLIGHT);
   void newFrame();
-  void buildUI(float frameTime, const glm::vec3 &cameraPos, const glm::vec3 &cameraRot, bool &wireframeEnabled, bool &normalViewEnabled, bool &useOrthoCamera);
+  void buildUI(float frameTime, const glm::vec3 &cameraPos, const glm::vec3 &cameraRot, bool &wireframeEnabled, bool &normalViewEnabled, bool &useOrthoCamera, bool &showEngineStats);
   void render(VkCommandBuffer commandBuffer);
+  void renderPlatformWindows();
   void shutdown();
 
 private:

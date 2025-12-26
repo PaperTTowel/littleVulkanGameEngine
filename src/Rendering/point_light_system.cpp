@@ -80,7 +80,13 @@ namespace lve{
 
         PipelineConfigInfo pipelineConfig{};
         LvePipeline::defaultPipelineConfigInfo(pipelineConfig);
-        LvePipeline::enableAlphaBlending(pipelineConfig);
+        pipelineConfig.colorBlendAttachment.blendEnable = VK_TRUE;
+        pipelineConfig.colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        pipelineConfig.colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        pipelineConfig.colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+        pipelineConfig.colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        pipelineConfig.colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        pipelineConfig.colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
         pipelineConfig.attributeDescriptions.clear();
         pipelineConfig.bindingDescriptions.clear();
         pipelineConfig.renderPass = renderPass;

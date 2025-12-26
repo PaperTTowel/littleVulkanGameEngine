@@ -107,6 +107,63 @@ namespace lve {
     return light;
   }
 
+  LveGameObject &SceneSystem::createMeshObjectWithId(
+    LveGameObject::id_t id,
+    const glm::vec3 &position,
+    const std::string &modelPath) {
+    const std::string pathToUse = modelPath.empty() ? "Assets/models/colored_cube.obj" : modelPath;
+    auto model = loadModelCached(pathToUse);
+    auto &obj = gameObjectManager.createGameObjectWithId(id);
+    obj.model = model;
+    obj.modelPath = pathToUse;
+    obj.name = "Mesh " + std::to_string(obj.getId());
+    obj.enableTextureType = 0;
+    obj.isSprite = false;
+    obj.billboardMode = BillboardMode::None;
+    obj.transform.translation = position;
+    obj.transform.scale = glm::vec3(1.f);
+    obj.transformDirty = true;
+    return obj;
+  }
+
+  LveGameObject &SceneSystem::createSpriteObjectWithId(
+    LveGameObject::id_t id,
+    const glm::vec3 &position,
+    ObjectState state,
+    const std::string &metaPath) {
+    if (!spriteModel) {
+      spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");
+    }
+    auto &obj = gameObjectManager.createGameObjectWithId(id);
+    obj.model = spriteModel;
+    obj.name = "Sprite " + std::to_string(obj.getId());
+    obj.enableTextureType = 1;
+    obj.isSprite = true;
+    obj.billboardMode = BillboardMode::Cylindrical;
+    obj.spriteMetaPath = metaPath;
+    obj.transform.translation = position;
+    obj.transform.rotation = {0.f, 0.f, 0.f};
+    obj.objState = state;
+    obj.transformDirty = true;
+    if (spriteAnimator) {
+      spriteAnimator->applySpriteState(obj, state);
+    }
+    return obj;
+  }
+
+  LveGameObject &SceneSystem::createPointLightObjectWithId(
+    LveGameObject::id_t id,
+    const glm::vec3 &position,
+    float intensity,
+    float radius,
+    const glm::vec3 &color) {
+    auto &light = gameObjectManager.makePointLightWithId(id, intensity, radius, color);
+    light.name = "PointLight " + std::to_string(light.getId());
+    light.transform.translation = position;
+    light.transformDirty = true;
+    return light;
+  }
+
   Scene SceneSystem::exportSceneSnapshot() const {
     Scene scene{};
     scene.version = 1;

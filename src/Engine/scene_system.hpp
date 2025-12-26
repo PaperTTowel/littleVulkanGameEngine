@@ -47,6 +47,21 @@ namespace lve {
       const glm::vec3 &position,
       const std::string &modelPath = "Assets/models/colored_cube.obj");
     LveGameObject &createPointLightObject(const glm::vec3 &position);
+    LveGameObject &createSpriteObjectWithId(
+      LveGameObject::id_t id,
+      const glm::vec3 &position,
+      ObjectState state,
+      const std::string &metaPath);
+    LveGameObject &createMeshObjectWithId(
+      LveGameObject::id_t id,
+      const glm::vec3 &position,
+      const std::string &modelPath);
+    LveGameObject &createPointLightObjectWithId(
+      LveGameObject::id_t id,
+      const glm::vec3 &position,
+      float intensity,
+      float radius,
+      const glm::vec3 &color);
 
   private:
     static ObjectState objectStateFromString(const std::string &name);

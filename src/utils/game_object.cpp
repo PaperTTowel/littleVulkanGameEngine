@@ -1,6 +1,7 @@
 #include "utils/game_object.hpp"
 
 #include <numeric>
+#include <stdexcept>
 
 namespace lve {
 
@@ -62,6 +63,35 @@ namespace lve {
 
   LveGameObject &LveGameObjectManager::makePointLight(float intensity, float radius, glm::vec3 color) {
     auto &gameObj = createGameObject();
+    gameObj.color = color;
+    gameObj.transform.scale.x = radius;
+    gameObj.pointLight = std::make_unique<PointLightComponent>();
+    gameObj.pointLight->lightIntensity = intensity;
+    return gameObj;
+  }
+
+  LveGameObject &LveGameObjectManager::createGameObjectWithId(LveGameObject::id_t id) {
+    if (gameObjects.count(id)) {
+      return gameObjects.at(id);
+    }
+    if (id >= MAX_GAME_OBJECTS) {
+      throw std::runtime_error("GameObject id exceeds MAX_GAME_OBJECTS");
+    }
+    auto gameObject = LveGameObject{id, *this};
+    gameObject.diffuseMap = textureDefault;
+    gameObjects.emplace(id, std::move(gameObject));
+    if (id >= currentId) {
+      currentId = id + 1;
+    }
+    return gameObjects.at(id);
+  }
+
+  LveGameObject &LveGameObjectManager::makePointLightWithId(
+    LveGameObject::id_t id,
+    float intensity,
+    float radius,
+    glm::vec3 color) {
+    auto &gameObj = createGameObjectWithId(id);
     gameObj.color = color;
     gameObj.transform.scale.x = radius;
     gameObj.pointLight = std::make_unique<PointLightComponent>();

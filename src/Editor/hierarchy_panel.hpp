@@ -20,6 +20,7 @@ namespace lve::editor {
   HierarchyActions BuildHierarchyPanel(
     LveGameObjectManager &manager,
     HierarchyPanelState &state,
-    LveGameObject::id_t protectedId);
+    LveGameObject::id_t protectedId,
+    bool *open);
 
 } // namespace lve::editor

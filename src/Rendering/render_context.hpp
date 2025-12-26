@@ -10,6 +10,7 @@
 #include "Rendering/sprite_render_system.hpp"
 
 // std
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -17,14 +18,24 @@ namespace lve {
   class RenderContext {
   public:
     RenderContext(LveDevice &device, LveRenderer &renderer);
+    ~RenderContext();
 
     VkCommandBuffer beginFrame();
     void endFrame();
     void beginSwapChainRenderPass(VkCommandBuffer commandBuffer);
     void endSwapChainRenderPass(VkCommandBuffer commandBuffer);
+    bool beginSceneViewRenderPass(VkCommandBuffer commandBuffer);
+    void endSceneViewRenderPass(VkCommandBuffer commandBuffer);
+    bool beginGameViewRenderPass(VkCommandBuffer commandBuffer);
+    void endGameViewRenderPass(VkCommandBuffer commandBuffer);
+    void ensureOffscreenTargets(uint32_t sceneWidth, uint32_t sceneHeight, uint32_t gameWidth, uint32_t gameHeight);
 
     bool wasSwapChainRecreated();
     VkRenderPass getSwapChainRenderPass() const;
+    VkDescriptorSet getSceneViewDescriptor() const;
+    VkDescriptorSet getGameViewDescriptor() const;
+    VkExtent2D getSceneViewExtent() const;
+    VkExtent2D getGameViewExtent() const;
 
     FrameInfo makeFrameInfo(float frameTime, LveCamera &camera, LveGameObject::Map &gameObjects, VkCommandBuffer commandBuffer);
     void updateGlobalUbo(int frameIndex, const GlobalUbo &ubo);
@@ -34,7 +45,25 @@ namespace lve {
     PointLightSystem &pointLightSystem() { return *pointLightSystemPtr; }
 
   private:
+    struct OffscreenTarget {
+      VkExtent2D extent{};
+      VkImage colorImage{VK_NULL_HANDLE};
+      VkDeviceMemory colorMemory{VK_NULL_HANDLE};
+      VkImageView colorView{VK_NULL_HANDLE};
+      VkImage depthImage{VK_NULL_HANDLE};
+      VkDeviceMemory depthMemory{VK_NULL_HANDLE};
+      VkImageView depthView{VK_NULL_HANDLE};
+      VkFramebuffer framebuffer{VK_NULL_HANDLE};
+      VkSampler sampler{VK_NULL_HANDLE};
+      VkDescriptorSet imguiDescriptor{VK_NULL_HANDLE};
+    };
+
     void createBuffersAndDescriptors();
+    void createOffscreenRenderPass();
+    void destroyOffscreenRenderPass();
+    void destroyOffscreenTarget(OffscreenTarget &target);
+    void createOffscreenTarget(OffscreenTarget &target, VkExtent2D extent);
+    void beginOffscreenRenderPass(VkCommandBuffer commandBuffer, const OffscreenTarget &target);
     void createRenderSystems();
 
     LveDevice &lveDevice;
@@ -50,6 +79,11 @@ namespace lve {
     std::unique_ptr<SpriteRenderSystem> spriteRenderSystem;
     std::unique_ptr<PointLightSystem> pointLightSystemPtr;
 
+    VkRenderPass offscreenRenderPass{VK_NULL_HANDLE};
+    VkFormat offscreenColorFormat{VK_FORMAT_UNDEFINED};
+    VkFormat offscreenDepthFormat{VK_FORMAT_UNDEFINED};
+    OffscreenTarget sceneViewTarget{};
+    OffscreenTarget gameViewTarget{};
     bool swapChainRecreated{false};
   };
 } // namespace lve

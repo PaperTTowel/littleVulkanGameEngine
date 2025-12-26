@@ -13,6 +13,6 @@ namespace lve::editor {
     bool loadRequested{false};
   };
 
-  ScenePanelActions BuildScenePanel(ScenePanelState &state);
+  ScenePanelActions BuildScenePanel(ScenePanelState &state, bool *open);
 
 } // namespace lve::editor

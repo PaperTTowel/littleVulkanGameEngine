@@ -3,7 +3,7 @@
 	url = https://github.com/g-truc/glm
 [submodule "external/imgui"]
 	path = external/imgui
-	url = https://github.com/ocornut/imgui
+	url = https://github.com/ocornut/imgui.git
 [submodule "external/imguiZmo"]
 	path = external/imguiZmo
 	url = https://github.com/CedricGuillemet/ImGuizmo

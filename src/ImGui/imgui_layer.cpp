@@ -38,6 +38,9 @@ void ImGuiLayer::init(VkRenderPass renderPass, uint32_t imageCount) {
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
   ImGui::StyleColorsDark();
 
   createDescriptorPool(imageCount);
@@ -73,7 +76,11 @@ void ImGuiLayer::buildUI(
   const glm::vec3 &cameraRot,
   bool &wireframeEnabled,
   bool &normalViewEnabled,
-  bool &useOrthoCamera) {
+  bool &useOrthoCamera,
+  bool &showEngineStats) {
+
+  ImGuiDockNodeFlags dockspaceFlags = ImGuiDockNodeFlags_PassthruCentralNode;
+  ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), dockspaceFlags);
 
   const float frameMsNow = frameTime * 1000.f;
   frameTimeHistory[frameTimeOffset % frameTimeHistory.size()] = frameMsNow;
@@ -97,34 +104,47 @@ void ImGuiLayer::buildUI(
     accumCount = 0;
   }
 
-  ImGui::Begin("Engine Stats");
-  ImGui::Text("FPS: %.1f", displayFps);
-  ImGui::Text("Frame: %.2f ms", displayFrameMs);
-  ImGui::PlotLines(
-    "Frame time (ms)",
-    frameTimeHistory.data(),
-    static_cast<int>(frameTimeHistory.size()),
-    static_cast<int>(frameTimeOffset % frameTimeHistory.size()),
-    nullptr,
-    0.f,
-    40.f,
-    ImVec2(0, 80));
+  if (showEngineStats) {
+    if (!ImGui::Begin("Engine Stats", &showEngineStats)) {
+      ImGui::End();
+      return;
+    }
+    ImGui::Text("FPS: %.1f", displayFps);
+    ImGui::Text("Frame: %.2f ms", displayFrameMs);
+    ImGui::PlotLines(
+      "Frame time (ms)",
+      frameTimeHistory.data(),
+      static_cast<int>(frameTimeHistory.size()),
+      static_cast<int>(frameTimeOffset % frameTimeHistory.size()),
+      nullptr,
+      0.f,
+      40.f,
+      ImVec2(0, 80));
 
-  ImGui::Separator();
-  ImGui::Text("Camera Pos: [%.2f, %.2f, %.2f]", cameraPos.x, cameraPos.y, cameraPos.z);
-  ImGui::Text("Camera Rot: [%.2f, %.2f, %.2f]", cameraRot.x, cameraRot.y, cameraRot.z);
+    ImGui::Separator();
+    ImGui::Text("Camera Pos: [%.2f, %.2f, %.2f]", cameraPos.x, cameraPos.y, cameraPos.z);
+    ImGui::Text("Camera Rot: [%.2f, %.2f, %.2f]", cameraRot.x, cameraRot.y, cameraRot.z);
 
-  ImGui::Separator();
-  ImGui::Checkbox("Wireframe", &wireframeEnabled);
-  ImGui::Checkbox("Normal view (shader toggle)", &normalViewEnabled);
-  ImGui::Checkbox("Ortho camera", &useOrthoCamera);
+    ImGui::Separator();
+    ImGui::Checkbox("Wireframe", &wireframeEnabled);
+    ImGui::Checkbox("Normal view (shader toggle)", &normalViewEnabled);
+    ImGui::Checkbox("Ortho camera", &useOrthoCamera);
 
-  ImGui::End();
+    ImGui::End();
+  }
 }
 
 void ImGuiLayer::render(VkCommandBuffer commandBuffer) {
   ImGui::Render();
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+}
+
+void ImGuiLayer::renderPlatformWindows() {
+  ImGuiIO &io = ImGui::GetIO();
+  if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+    ImGui::UpdatePlatformWindows();
+    ImGui::RenderPlatformWindowsDefault();
+  }
 }
 
 void ImGuiLayer::shutdown() {

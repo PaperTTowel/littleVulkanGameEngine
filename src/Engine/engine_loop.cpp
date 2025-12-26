@@ -13,13 +13,8 @@
 #include <glm/gtc/constants.hpp>
 
 // std
-#include <array>
 #include <chrono>
-#include <cassert>
 #include <iostream>
-#include <sstream>
-#include <string>
-#include <stdexcept>
 
 namespace lve {
 
@@ -40,7 +35,8 @@ namespace lve {
     std::cout << "Alignment: " << lveDevice.properties.limits.minUniformBufferOffsetAlignment << "\n";
     std::cout << "atom size: " << lveDevice.properties.limits.nonCoherentAtomSize << "\n";
 
-    LveCamera camera{};
+    LveCamera editorCamera{};
+    LveCamera gameCamera{};
     editorSystem.init(renderContext.getSwapChainRenderPass());
 
     auto &viewerObject = gameObjectManager.createGameObject();
@@ -49,6 +45,16 @@ namespace lve {
 
     KeyboardMovementController cameraController{};
     CharacterMovementController characterController{};
+
+    ViewportInfo sceneViewInfo{};
+    ViewportInfo gameViewInfo{};
+    {
+      VkExtent2D initialExtent = lveWindow.getExtent();
+      sceneViewInfo.width = initialExtent.width;
+      sceneViewInfo.height = initialExtent.height;
+      sceneViewInfo.visible = true;
+      gameViewInfo = sceneViewInfo;
+    }
 
     auto currentTime = std::chrono::high_resolution_clock::now();
 
@@ -59,25 +65,19 @@ namespace lve {
       float frameTime = std::chrono::duration<float, std::chrono::seconds::period>(newTime - currentTime).count();
       currentTime = newTime;
       
-      // camera
-      cameraController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, viewerObject);
-      viewerObject.transformDirty = true;
-      camera.setViewYXZ(viewerObject.transform.translation, viewerObject.transform.rotation);
-
-      float aspect = lveRenderer.getAspectRatio();
-      if (useOrthoCamera) {
-        float orthoHeight = 10.f;
-        float orthoWidth = orthoHeight * aspect;
-        camera.setOrthographicProjection(
-          -orthoWidth / 2.f,
-          orthoWidth / 2.f,
-          -orthoHeight / 2.f,
-          orthoHeight / 2.f,
-          -1.f,
-          100.f);
-      } else {
-        camera.setPerspectiveProjection(glm::radians(50.f), aspect, 0.1f, 100.f);
+      // editor camera
+      if (sceneViewInfo.hovered) {
+        cameraController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, viewerObject);
       }
+      if (sceneViewInfo.hovered && sceneViewInfo.rightMouseDown) {
+        const float mouseSensitivity = 0.003f;
+        viewerObject.transform.rotation.y += sceneViewInfo.mouseDeltaX * mouseSensitivity;
+        viewerObject.transform.rotation.x -= sceneViewInfo.mouseDeltaY * mouseSensitivity;
+      }
+      viewerObject.transformDirty = true;
+      viewerObject.transform.rotation.x = glm::clamp(viewerObject.transform.rotation.x, -1.5f, 1.5f);
+      viewerObject.transform.rotation.y = glm::mod(viewerObject.transform.rotation.y, glm::two_pi<float>());
+      editorCamera.setViewYXZ(viewerObject.transform.translation, viewerObject.transform.rotation);
 
       // character update (2D sprite)
       const auto characterId = sceneSystem.getCharacterId();
@@ -104,158 +104,121 @@ namespace lve {
       float frameDuration = stateInfoPtr ? stateInfoPtr->frameDuration : 0.15f;
       gameObjectManager.updateFrame(character, frameCount, frameTime, frameDuration);
 
-      // camera target character
-      // glm::vec3 targetPos = character.transform.translation + glm::vec3(-3.0f, -2.0f, .0f);
-      // viewerObject.transform.translation = glm::mix(viewerObject.transform.translation, targetPos, 0.1f);
+      // game camera follows character
+      const glm::vec3 gameCamOffset{-3.0f, -2.0f, 0.0f};
+      const glm::vec3 gameCamPos = character.transform.translation + gameCamOffset;
+      gameCamera.setViewTarget(gameCamPos, character.transform.translation);
 
       auto commandBuffer = renderContext.beginFrame();
       if (renderContext.wasSwapChainRecreated()) {
         editorSystem.onRenderPassChanged(renderContext.getSwapChainRenderPass());
       }
       if (commandBuffer) {
-        FrameInfo frameInfo = renderContext.makeFrameInfo(
-          frameTime,
-          camera,
-          gameObjectManager.gameObjects,
-          commandBuffer);
+        renderContext.ensureOffscreenTargets(
+          sceneViewInfo.visible ? sceneViewInfo.width : 0,
+          sceneViewInfo.visible ? sceneViewInfo.height : 0,
+          gameViewInfo.visible ? gameViewInfo.width : 0,
+          gameViewInfo.visible ? gameViewInfo.height : 0);
 
-        EditorFrameResult editorResult = editorSystem.buildFrame(
+        const uint32_t sceneWidth = sceneViewInfo.width > 0 ? sceneViewInfo.width : lveWindow.getExtent().width;
+        const uint32_t sceneHeight = sceneViewInfo.height > 0 ? sceneViewInfo.height : lveWindow.getExtent().height;
+        const float sceneAspect = sceneHeight > 0 ? (static_cast<float>(sceneWidth) / static_cast<float>(sceneHeight)) : lveRenderer.getAspectRatio();
+        editorCamera.setPerspectiveProjection(glm::radians(50.f), sceneAspect, 0.1f, 100.f);
+
+        EditorFrameResult editorResult = editorSystem.update(
           frameTime,
           viewerObject.transform.translation,
           viewerObject.transform.rotation,
           wireframeEnabled,
           normalViewEnabled,
           useOrthoCamera,
+          sceneSystem,
           gameObjectManager,
           characterId,
+          viewerId,
           spriteAnimator,
-          camera.getView(),
-          camera.getProjection(),
-          lveWindow.getExtent(),
-          resourceBrowserState);
+          editorCamera.getView(),
+          editorCamera.getProjection(),
+          VkExtent2D{sceneWidth, sceneHeight},
+          resourceBrowserState,
+          reinterpret_cast<void *>(renderContext.getSceneViewDescriptor()),
+          reinterpret_cast<void *>(renderContext.getGameViewDescriptor()));
 
-        auto &hierarchyActions = editorResult.hierarchyActions;
-        auto &sceneActions = editorResult.sceneActions;
-        auto &resourceActions = editorResult.resourceActions;
-        LveGameObject *selectedObj = editorResult.selectedObject;
-
-        if (resourceActions.setActiveSpriteMeta) {
-          if (sceneSystem.setActiveSpriteMetadata(resourceBrowserState.activeSpriteMetaPath)) {
-            spriteAnimator = sceneSystem.getSpriteAnimator();
-          }
-        }
-
-        if (resourceActions.applySpriteMetaToSelection &&
-            selectedObj &&
-            selectedObj->isSprite) {
-          if (sceneSystem.setActiveSpriteMetadata(resourceBrowserState.activeSpriteMetaPath)) {
-            selectedObj->spriteMetaPath = resourceBrowserState.activeSpriteMetaPath;
-            if (spriteAnimator) {
-              spriteAnimator->applySpriteState(*selectedObj, selectedObj->objState);
-            }
-            spriteAnimator = sceneSystem.getSpriteAnimator();
-          }
-        }
-
-        if (resourceActions.applyMeshToSelection &&
-            selectedObj &&
-            selectedObj->model) {
-          const std::string meshPath = resourceBrowserState.activeMeshPath.empty()
-            ? "Assets/models/colored_cube.obj"
-            : resourceBrowserState.activeMeshPath;
-          try {
-            selectedObj->model = sceneSystem.loadModelCached(meshPath);
-            selectedObj->modelPath = meshPath;
-          } catch (const std::exception &e) {
-            std::cerr << "Failed to load mesh " << meshPath << ": " << e.what() << "\n";
-          }
-        }
-
-        glm::vec3 spawnForward{0.f, 0.f, -1.f};
-        {
-          glm::mat4 invView = camera.getInverseView();
-          glm::vec3 forward{-invView[2][0], -invView[2][1], -invView[2][2]};
-          if (glm::length(forward) > 0.0001f) {
-            spawnForward = glm::normalize(forward);
-          }
-        }
-        const glm::vec3 spawnPos = viewerObject.transform.translation + spawnForward * 2.f;
-        const std::string meshPathForNew = resourceBrowserState.activeMeshPath.empty()
-          ? "Assets/models/colored_cube.obj"
-          : resourceBrowserState.activeMeshPath;
-        const std::string spriteMetaForNew = resourceBrowserState.activeSpriteMetaPath.empty()
-          ? "Assets/textures/characters/player.json"
-          : resourceBrowserState.activeSpriteMetaPath;
-
-        switch (hierarchyActions.createRequest) {
-          case editor::HierarchyCreateRequest::Sprite: {
-            auto &obj = sceneSystem.createSpriteObject(spawnPos, ObjectState::IDLE, spriteMetaForNew);
-            editorSystem.setSelectedId(obj.getId());
-            obj.transformDirty = true;
-            break;
-          }
-          case editor::HierarchyCreateRequest::Mesh: {
-            auto &obj = sceneSystem.createMeshObject(spawnPos, meshPathForNew);
-            editorSystem.setSelectedId(obj.getId());
-            obj.transformDirty = true;
-            break;
-          }
-          case editor::HierarchyCreateRequest::PointLight: {
-            auto &obj = sceneSystem.createPointLightObject(spawnPos);
-            editorSystem.setSelectedId(obj.getId());
-            obj.transformDirty = true;
-            break;
-          }
-          case editor::HierarchyCreateRequest::None:
-          default: break;
-        }
-
-        if (hierarchyActions.deleteSelected) {
-          auto selectedId = editorSystem.getSelectedId();
-          if (selectedId && *selectedId != characterId) {
-            if (gameObjectManager.destroyGameObject(*selectedId)) {
-              editorSystem.setSelectedId(std::nullopt);
-            }
-          }
-        }
-
-        if (sceneActions.saveRequested) {
-          sceneSystem.saveSceneToFile(editorSystem.getScenePanelState().path);
-        }
-        if (sceneActions.loadRequested) {
-          vkDeviceWaitIdle(lveDevice.device());
-          sceneSystem.loadSceneFromFile(editorSystem.getScenePanelState().path, viewerId);
-          spriteAnimator = sceneSystem.getSpriteAnimator();
-        }
+        sceneViewInfo = editorResult.sceneView;
+        gameViewInfo = editorResult.gameView;
 
         // rendering toggles pushed to shader systems
         renderContext.simpleSystem().setWireframe(wireframeEnabled);
         renderContext.simpleSystem().setNormalView(normalViewEnabled);
         renderContext.spriteSystem().setBillboardMode(character.billboardMode);
 
-        // update UBOs & point lights
-        GlobalUbo ubo{};
-        ubo.projection = camera.getProjection();
-        ubo.view = camera.getView();
-        ubo.inverseView = camera.getInverseView();
-        renderContext.pointLightSystem().update(frameInfo, ubo);
-        renderContext.updateGlobalUbo(frameInfo.frameIndex, ubo);
+        const uint32_t gameWidth = gameViewInfo.width > 0 ? gameViewInfo.width : lveWindow.getExtent().width;
+        const uint32_t gameHeight = gameViewInfo.height > 0 ? gameViewInfo.height : lveWindow.getExtent().height;
+        const float gameAspect = gameHeight > 0 ? (static_cast<float>(gameWidth) / static_cast<float>(gameHeight)) : lveRenderer.getAspectRatio();
+        if (useOrthoCamera) {
+          float orthoHeight = 10.f;
+          float orthoWidth = orthoHeight * gameAspect;
+          gameCamera.setOrthographicProjection(
+            -orthoWidth / 2.f,
+            orthoWidth / 2.f,
+            -orthoHeight / 2.f,
+            orthoHeight / 2.f,
+            -1.f,
+            100.f);
+        } else {
+          gameCamera.setPerspectiveProjection(glm::radians(50.f), gameAspect, 0.1f, 100.f);
+        }
 
+        const int frameIndex = lveRenderer.getFrameindex();
         // final step of update is updating the game objects buffer data
         // The render functions MUST not change a game objects transform data
-        gameObjectManager.updateBuffer(frameInfo.frameIndex);
+        gameObjectManager.updateBuffer(frameIndex);
 
-        // render
+        if (renderContext.beginSceneViewRenderPass(commandBuffer)) {
+          FrameInfo frameInfo = renderContext.makeFrameInfo(
+            frameTime,
+            editorCamera,
+            gameObjectManager.gameObjects,
+            commandBuffer);
+
+          GlobalUbo ubo{};
+          ubo.projection = editorCamera.getProjection();
+          ubo.view = editorCamera.getView();
+          ubo.inverseView = editorCamera.getInverseView();
+          renderContext.pointLightSystem().update(frameInfo, ubo);
+          renderContext.updateGlobalUbo(frameInfo.frameIndex, ubo);
+
+          renderContext.simpleSystem().renderGameObjects(frameInfo);
+          renderContext.pointLightSystem().render(frameInfo);
+          renderContext.spriteSystem().renderSprites(frameInfo);
+          renderContext.endSceneViewRenderPass(commandBuffer);
+        }
+
+        if (renderContext.beginGameViewRenderPass(commandBuffer)) {
+          FrameInfo frameInfo = renderContext.makeFrameInfo(
+            frameTime,
+            gameCamera,
+            gameObjectManager.gameObjects,
+            commandBuffer);
+
+          GlobalUbo ubo{};
+          ubo.projection = gameCamera.getProjection();
+          ubo.view = gameCamera.getView();
+          ubo.inverseView = gameCamera.getInverseView();
+          renderContext.pointLightSystem().update(frameInfo, ubo);
+          renderContext.updateGlobalUbo(frameInfo.frameIndex, ubo);
+
+          renderContext.simpleSystem().renderGameObjects(frameInfo);
+          renderContext.pointLightSystem().render(frameInfo);
+          renderContext.spriteSystem().renderSprites(frameInfo);
+          renderContext.endGameViewRenderPass(commandBuffer);
+        }
+
         renderContext.beginSwapChainRenderPass(commandBuffer);
-
-        // order here matters
-        renderContext.simpleSystem().renderGameObjects(frameInfo);
-        renderContext.pointLightSystem().render(frameInfo);
-        renderContext.spriteSystem().renderSprites(frameInfo);
         editorSystem.render(commandBuffer);
-
         renderContext.endSwapChainRenderPass(commandBuffer);
         renderContext.endFrame();
+        editorSystem.renderPlatformWindows();
       }
     }
 

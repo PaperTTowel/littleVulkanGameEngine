@@ -31,17 +31,47 @@ namespace lve::editor {
     }
   } // namespace
 
-  void BuildInspectorPanel(
+  InspectorActions BuildInspectorPanel(
     LveGameObject *selected,
     SpriteAnimator *animator,
     const glm::mat4 &view,
     const glm::mat4 &projection,
-    VkExtent2D viewportExtent) {
-    ImGui::Begin("Inspector");
+    VkExtent2D viewportExtent,
+    bool *open,
+    const GizmoContext &gizmoContext,
+    int gizmoOperation,
+    int gizmoMode) {
+    InspectorActions actions{};
+    if (open) {
+      if (!ImGui::Begin("Inspector", open)) {
+        ImGui::End();
+        return actions;
+      }
+    } else {
+      ImGui::Begin("Inspector");
+    }
     if (!selected) {
       ImGui::Text("No selection");
       ImGui::End();
-      return;
+      return actions;
+    }
+
+    TransformSnapshot beforeTransform{
+      selected->transform.translation,
+      selected->transform.rotation,
+      selected->transform.scale};
+    std::string beforeName = selected->name;
+
+    static LveGameObject::id_t lastSelectedId = 0;
+    static bool transformEditing = false;
+    static TransformSnapshot transformEditStart{};
+    static bool nameEditing = false;
+    static std::string nameEditStart{};
+
+    if (lastSelectedId != selected->getId()) {
+      transformEditing = false;
+      nameEditing = false;
+      lastSelectedId = selected->getId();
     }
 
     ImGui::Text("ID: %u", selected->getId());
@@ -50,39 +80,65 @@ namespace lve::editor {
     if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
       selected->name = nameBuf;
     }
+    if (ImGui::IsItemActivated()) {
+      nameEditing = true;
+      nameEditStart = beforeName;
+    }
+    const bool nameCommitted = ImGui::IsItemDeactivatedAfterEdit();
+    if (nameCommitted && nameEditing) {
+      nameEditing = false;
+      if (selected->name != nameEditStart) {
+        actions.nameChanged = true;
+        actions.beforeName = nameEditStart;
+        actions.afterName = selected->name;
+      }
+    }
     ImGui::Text("Type: %s", typeLabel(*selected));
     ImGui::Separator();
 
     // Transform
     ImGui::Text("Transform");
     bool transformEdited = false;
-    transformEdited |= ImGui::DragFloat3("Position", &selected->transform.translation.x, 0.05f);
-    transformEdited |= ImGui::DragFloat3("Rotation (rad)", &selected->transform.rotation.x, 0.05f);
-    transformEdited |= ImGui::DragFloat3("Scale", &selected->transform.scale.x, 0.05f, 0.001f, 100.f);
-    if (transformEdited) {
-      selected->transformDirty = true;
+    bool transformCommitted = false;
+    const bool posChanged = ImGui::DragFloat3("Position", &selected->transform.translation.x, 0.05f);
+    if (posChanged) transformEdited = true;
+    if (ImGui::IsItemActivated() && !transformEditing) {
+      transformEditing = true;
+      transformEditStart = beforeTransform;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+      transformCommitted = true;
     }
 
-    // Gizmo controls
-    static ImGuizmo::OPERATION op = ImGuizmo::TRANSLATE;
-    static ImGuizmo::MODE mode = ImGuizmo::LOCAL;
-    if (ImGui::RadioButton("Move", op == ImGuizmo::TRANSLATE)) op = ImGuizmo::TRANSLATE;
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Rotate", op == ImGuizmo::ROTATE)) op = ImGuizmo::ROTATE;
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Scale", op == ImGuizmo::SCALE)) op = ImGuizmo::SCALE;
+    const bool rotChanged = ImGui::DragFloat3("Rotation (rad)", &selected->transform.rotation.x, 0.05f);
+    if (rotChanged) transformEdited = true;
+    if (ImGui::IsItemActivated() && !transformEditing) {
+      transformEditing = true;
+      transformEditStart = beforeTransform;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+      transformCommitted = true;
+    }
 
-    if (ImGui::RadioButton("Local", mode == ImGuizmo::LOCAL)) mode = ImGuizmo::LOCAL;
-    ImGui::SameLine();
-    if (ImGui::RadioButton("World", mode == ImGuizmo::WORLD)) mode = ImGuizmo::WORLD;
+    const bool scaleChanged = ImGui::DragFloat3("Scale", &selected->transform.scale.x, 0.05f, 0.001f, 100.f);
+    if (scaleChanged) transformEdited = true;
+    if (ImGui::IsItemActivated() && !transformEditing) {
+      transformEditing = true;
+      transformEditStart = beforeTransform;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+      transformCommitted = true;
+    }
 
-    ImGuizmo::BeginFrame();
-    ImGuizmo::SetDrawlist(ImGui::GetForegroundDrawList());
-    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::OPERATION op = static_cast<ImGuizmo::OPERATION>(gizmoOperation);
+    ImGuizmo::MODE mode = static_cast<ImGuizmo::MODE>(gizmoMode);
 
-    // Use display size for hit-testing/drawing
-    ImGuiIO &io = ImGui::GetIO();
-    ImGuizmo::SetRect(0.0f, 0.0f, io.DisplaySize.x, io.DisplaySize.y);
+    if (gizmoContext.valid && gizmoContext.drawList) {
+      ImGuizmo::BeginFrame();
+      ImGuizmo::SetDrawlist(static_cast<ImDrawList *>(gizmoContext.drawList));
+      ImGuizmo::SetRect(gizmoContext.x, gizmoContext.y, gizmoContext.width, gizmoContext.height);
+      ImGuizmo::SetOrthographic(false);
+    }
 
     glm::mat4 model = selected->transform.mat4();
     // Convert Vulkan projection to ImGuizmo-friendly OpenGL clip (-1..1 depth) and flip Y
@@ -97,22 +153,49 @@ namespace lve::editor {
     float modelArr[16];
     std::memcpy(modelArr, glm::value_ptr(model), sizeof(modelArr));
 
-    ImGuizmo::Manipulate(
-      glm::value_ptr(view),
-      glm::value_ptr(gizmoProj),
-      op,
-      mode,
-      modelArr,
-      nullptr,
-      nullptr);
+    static bool gizmoWasUsing = false;
+    bool gizmoUsing = false;
+    if (gizmoContext.valid && gizmoContext.drawList) {
+      ImGuizmo::Manipulate(
+        glm::value_ptr(view),
+        glm::value_ptr(gizmoProj),
+        op,
+        mode,
+        modelArr,
+        nullptr,
+        nullptr);
 
-    if (ImGuizmo::IsUsing()) {
-      float trans[3], rotDeg[3], scale[3];
-      ImGuizmo::DecomposeMatrixToComponents(modelArr, trans, rotDeg, scale);
-      selected->transform.translation = glm::vec3{trans[0], trans[1], trans[2]};
-      selected->transform.rotation = glm::radians(glm::vec3{rotDeg[0], rotDeg[1], rotDeg[2]});
-      selected->transform.scale = glm::vec3{scale[0], scale[1], scale[2]};
+      gizmoUsing = ImGuizmo::IsUsing();
+      if (gizmoUsing) {
+        float trans[3], rotDeg[3], scale[3];
+        ImGuizmo::DecomposeMatrixToComponents(modelArr, trans, rotDeg, scale);
+        selected->transform.translation = glm::vec3{trans[0], trans[1], trans[2]};
+        selected->transform.rotation = glm::radians(glm::vec3{rotDeg[0], rotDeg[1], rotDeg[2]});
+        selected->transform.scale = glm::vec3{scale[0], scale[1], scale[2]};
+        transformEdited = true;
+        if (!transformEditing) {
+          transformEditing = true;
+          transformEditStart = beforeTransform;
+        }
+      }
+    }
+
+    if (gizmoWasUsing && !gizmoUsing) {
+      transformCommitted = true;
+    }
+    gizmoWasUsing = gizmoUsing;
+    if (transformEdited) {
       selected->transformDirty = true;
+    }
+    if (transformCommitted && transformEditing) {
+      actions.transformChanged = true;
+      actions.transformCommitted = true;
+      actions.beforeTransform = transformEditStart;
+      actions.afterTransform = {
+        selected->transform.translation,
+        selected->transform.rotation,
+        selected->transform.scale};
+      transformEditing = false;
     }
 
     if (selected->pointLight) {
@@ -164,6 +247,7 @@ namespace lve::editor {
     }
 
     ImGui::End();
+    return actions;
   }
 
 } // namespace lve::editor
