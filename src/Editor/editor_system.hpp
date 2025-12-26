@@ -1,11 +1,11 @@
 #pragma once
 
 #include "ImGui/imgui_layer.hpp"
-#include "Editor/hierarchy_panel.hpp"
-#include "Editor/scene_panel.hpp"
-#include "Editor/resource_browser_panel.hpp"
-#include "Editor/inspector_panel.hpp"
-#include "Editor/editor_history.hpp"
+#include "Editor/UI/hierarchy_panel.hpp"
+#include "Editor/UI/scene_panel.hpp"
+#include "Editor/Workflow/resource_browser_panel.hpp"
+#include "Editor/UI/inspector_panel.hpp"
+#include "Editor/History/editor_history.hpp"
 
 // std
 #include <optional>

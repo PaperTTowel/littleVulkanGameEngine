@@ -2,7 +2,7 @@
 
 #include "Backend/device.hpp"
 #include "Engine/scene.hpp"
-#include "Editor/resource_browser_panel.hpp"
+#include "Editor/Workflow/resource_browser_panel.hpp"
 #include "utils/game_object.hpp"
 #include "utils/sprite_animator.hpp"
 #include "utils/sprite_metadata.hpp"
