@@ -12,6 +12,15 @@
 
 namespace lve {
 
+  namespace {
+    bool isIdentityTransform(const TransformComponent &transform) {
+      const float eps = 0.0001f;
+      return glm::length(transform.translation) < eps &&
+        glm::length(transform.rotation) < eps &&
+        glm::length(transform.scale - glm::vec3(1.f)) < eps;
+    }
+  } // namespace
+
   SceneSystem::SceneSystem(LveDevice &device)
     : lveDevice{device},
       gameObjectManager{device} {}
@@ -43,6 +52,38 @@ namespace lve {
     return sharedModel;
   }
 
+  void SceneSystem::ensureNodeOverrides(LveGameObject &obj) {
+    if (!obj.model) {
+      obj.nodeOverrides.clear();
+      return;
+    }
+    const auto &nodes = obj.model->getNodes();
+    if (obj.nodeOverrides.size() != nodes.size()) {
+      obj.nodeOverrides.clear();
+      obj.nodeOverrides.resize(nodes.size());
+    }
+  }
+
+  void SceneSystem::applyNodeOverrides(LveGameObject &obj, const MeshComponent &mesh) {
+    ensureNodeOverrides(obj);
+    for (auto &override : obj.nodeOverrides) {
+      override.enabled = false;
+      override.transform.translation = {};
+      override.transform.rotation = {};
+      override.transform.scale = {1.f, 1.f, 1.f};
+    }
+    for (const auto &override : mesh.nodeOverrides) {
+      if (override.node < 0 || static_cast<std::size_t>(override.node) >= obj.nodeOverrides.size()) {
+        continue;
+      }
+      auto &target = obj.nodeOverrides[static_cast<std::size_t>(override.node)];
+      target.enabled = true;
+      target.transform.translation = override.transform.position;
+      target.transform.rotation = override.transform.rotation;
+      target.transform.scale = override.transform.scale;
+    }
+  }
+
   bool SceneSystem::setActiveSpriteMetadata(const std::string &path) {
     SpriteMetadata meta{};
     if (!loadSpriteMetadata(path, meta)) {
@@ -69,12 +110,13 @@ namespace lve {
     obj.model = model;
     obj.modelPath = pathToUse;
     obj.name = "Mesh " + std::to_string(obj.getId());
-    obj.enableTextureType = 0;
+    obj.enableTextureType = model && model->hasAnyDiffuseTexture() ? 1 : 0;
     obj.isSprite = false;
     obj.billboardMode = BillboardMode::None;
     obj.transform.translation = position;
     obj.transform.scale = glm::vec3(1.f);
     obj.transformDirty = true;
+    ensureNodeOverrides(obj);
     return obj;
   }
 
@@ -117,12 +159,13 @@ namespace lve {
     obj.model = model;
     obj.modelPath = pathToUse;
     obj.name = "Mesh " + std::to_string(obj.getId());
-    obj.enableTextureType = 0;
+    obj.enableTextureType = model && model->hasAnyDiffuseTexture() ? 1 : 0;
     obj.isSprite = false;
     obj.billboardMode = BillboardMode::None;
     obj.transform.translation = position;
     obj.transform.scale = glm::vec3(1.f);
     obj.transformDirty = true;
+    ensureNodeOverrides(obj);
     return obj;
   }
 
@@ -207,6 +250,20 @@ namespace lve {
         MeshComponent mc{};
         mc.model = obj.modelPath.empty() ? "Assets/models/colored_cube.obj" : obj.modelPath;
         mc.material = obj.materialPath;
+        if (!obj.nodeOverrides.empty()) {
+          for (std::size_t i = 0; i < obj.nodeOverrides.size(); ++i) {
+            const auto &override = obj.nodeOverrides[i];
+            if (!override.enabled || isIdentityTransform(override.transform)) {
+              continue;
+            }
+            MeshComponent::NodeOverride nodeOverride{};
+            nodeOverride.node = static_cast<int>(i);
+            nodeOverride.transform.position = override.transform.translation;
+            nodeOverride.transform.rotation = override.transform.rotation;
+            nodeOverride.transform.scale = override.transform.scale;
+            mc.nodeOverrides.push_back(std::move(nodeOverride));
+          }
+        }
         e.mesh = mc;
       }
 
@@ -275,6 +332,7 @@ namespace lve {
         obj.transform.scale = e.transform.scale;
         obj.name = !e.name.empty() ? e.name : "Mesh " + std::to_string(obj.getId());
         obj.transformDirty = true;
+        applyNodeOverrides(obj, *e.mesh);
         continue;
       }
     }

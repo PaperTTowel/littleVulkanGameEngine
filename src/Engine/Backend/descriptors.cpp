@@ -136,7 +136,7 @@ LveDescriptorWriter::LveDescriptorWriter(LveDescriptorSetLayout &setLayout, LveD
     : setLayout{setLayout}, pool{pool} {}
 
 LveDescriptorWriter &LveDescriptorWriter::writeBuffer(
-    uint32_t binding, VkDescriptorBufferInfo *bufferInfo) {
+    uint32_t binding, const VkDescriptorBufferInfo *bufferInfo) {
   assert(setLayout.bindings.count(binding) == 1 && "Layout does not contain specified binding");
 
   auto &bindingDescription = setLayout.bindings[binding];

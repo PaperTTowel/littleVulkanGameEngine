@@ -38,6 +38,8 @@ namespace lve {
 
     std::shared_ptr<LveModel> loadModelCached(const std::string &path);
     bool setActiveSpriteMetadata(const std::string &path);
+    void ensureNodeOverrides(LveGameObject &obj);
+    void applyNodeOverrides(LveGameObject &obj, const MeshComponent &mesh);
 
     LveGameObject &createSpriteObject(
       const glm::vec3 &position,

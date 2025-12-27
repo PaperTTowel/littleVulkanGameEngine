@@ -35,6 +35,11 @@ namespace lve {
   struct MeshComponent {
     std::string model;
     std::string material;
+    struct NodeOverride {
+      int node{-1};
+      TransformData transform{};
+    };
+    std::vector<NodeOverride> nodeOverrides{};
   };
 
   struct LightComponent {

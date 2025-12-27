@@ -27,6 +27,7 @@ namespace lve {
       std::string spriteMetaPath{};
       std::string spriteStateName{};
       std::string modelPath{};
+      std::vector<NodeTransformOverride> nodeOverrides{};
       std::string name{};
     };
 
@@ -42,6 +43,7 @@ namespace lve {
       snapshot.spriteMetaPath = obj.spriteMetaPath;
       snapshot.spriteStateName = obj.spriteStateName;
       snapshot.modelPath = obj.modelPath;
+      snapshot.nodeOverrides = obj.nodeOverrides;
       snapshot.name = obj.name;
       if (obj.pointLight) {
         snapshot.lightIntensity = obj.pointLight->lightIntensity;
@@ -94,6 +96,10 @@ namespace lve {
       obj.transform.rotation = snapshot.transform.rotation;
       obj.transform.scale = snapshot.transform.scale;
       obj.name = snapshot.name;
+      if (!snapshot.nodeOverrides.empty()) {
+        sceneSystem.ensureNodeOverrides(obj);
+        obj.nodeOverrides = snapshot.nodeOverrides;
+      }
       obj.transformDirty = true;
     }
 
@@ -171,6 +177,31 @@ namespace lve {
       if (tMax < 0.f) return false;
       tHit = (tMin >= 0.f) ? tMin : tMax;
       return true;
+    }
+
+    void transformAabb(
+      const glm::mat4 &transform,
+      const glm::vec3 &min,
+      const glm::vec3 &max,
+      glm::vec3 &outMin,
+      glm::vec3 &outMax) {
+      outMin = glm::vec3(std::numeric_limits<float>::max());
+      outMax = glm::vec3(std::numeric_limits<float>::lowest());
+      glm::vec3 corners[8] = {
+        {min.x, min.y, min.z},
+        {max.x, min.y, min.z},
+        {min.x, max.y, min.z},
+        {max.x, max.y, min.z},
+        {min.x, min.y, max.z},
+        {max.x, min.y, max.z},
+        {min.x, max.y, max.z},
+        {max.x, max.y, max.z}
+      };
+      for (const auto &corner : corners) {
+        glm::vec3 world = glm::vec3(transform * glm::vec4(corner, 1.f));
+        outMin = glm::min(outMin, world);
+        outMax = glm::max(outMax, world);
+      }
     }
 
     bool intersectBillboardQuad(
@@ -421,7 +452,8 @@ namespace lve {
         &showInspector,
         gizmoContext,
         gizmoOperation,
-        gizmoMode);
+        gizmoMode,
+        hierarchyState.selectedNodeIndex);
     }
 
     if (showResourceBrowser) {
@@ -463,23 +495,60 @@ namespace lve {
             it->second.transformDirty = true;
           }});
       }
-      if (result.inspectorActions.nameChanged) {
-        const std::string beforeName = result.inspectorActions.beforeName;
-        const std::string afterName = result.inspectorActions.afterName;
-        history.push({
-          "Rename",
+        if (result.inspectorActions.nameChanged) {
+          const std::string beforeName = result.inspectorActions.beforeName;
+          const std::string afterName = result.inspectorActions.afterName;
+          history.push({
+            "Rename",
           [&, selectedId, beforeName]() {
             auto it = gameObjectManager.gameObjects.find(selectedId);
             if (it == gameObjectManager.gameObjects.end()) return;
             it->second.name = beforeName;
           },
           [&, selectedId, afterName]() {
-            auto it = gameObjectManager.gameObjects.find(selectedId);
-            if (it == gameObjectManager.gameObjects.end()) return;
-            it->second.name = afterName;
-          }});
+              auto it = gameObjectManager.gameObjects.find(selectedId);
+              if (it == gameObjectManager.gameObjects.end()) return;
+              it->second.name = afterName;
+            }});
+        }
+        if (result.inspectorActions.nodeOverridesChanged &&
+            result.inspectorActions.nodeOverridesCommitted) {
+          const auto before = result.inspectorActions.beforeNodeOverrides;
+          const auto after = result.inspectorActions.afterNodeOverrides;
+          history.push({
+            "Node Override",
+            [&, selectedId, before]() {
+              auto it = gameObjectManager.gameObjects.find(selectedId);
+              if (it == gameObjectManager.gameObjects.end()) return;
+              if (!it->second.model) return;
+              sceneSystem.ensureNodeOverrides(it->second);
+              auto &target = it->second.nodeOverrides;
+              for (auto &override : target) {
+                override.enabled = false;
+                override.transform = TransformComponent{};
+              }
+              const std::size_t count = std::min(target.size(), before.size());
+              for (std::size_t i = 0; i < count; ++i) {
+                target[i] = before[i];
+              }
+            },
+            [&, selectedId, after]() {
+              auto it = gameObjectManager.gameObjects.find(selectedId);
+              if (it == gameObjectManager.gameObjects.end()) return;
+              if (!it->second.model) return;
+              sceneSystem.ensureNodeOverrides(it->second);
+              auto &target = it->second.nodeOverrides;
+              for (auto &override : target) {
+                override.enabled = false;
+                override.transform = TransformComponent{};
+              }
+              const std::size_t count = std::min(target.size(), after.size());
+              for (std::size_t i = 0; i < count; ++i) {
+                target[i] = after[i];
+              }
+            }});
+        }
       }
-    }
 
     if (result.resourceActions.setActiveSpriteMeta) {
       if (sceneSystem.setActiveSpriteMetadata(resourceBrowserState.activeSpriteMetaPath)) {
@@ -508,6 +577,12 @@ namespace lve {
       try {
         result.selectedObject->model = sceneSystem.loadModelCached(meshPath);
         result.selectedObject->modelPath = meshPath;
+        result.selectedObject->enableTextureType =
+          result.selectedObject->model && result.selectedObject->model->hasAnyDiffuseTexture() ? 1 : 0;
+        result.selectedObject->nodeOverrides.clear();
+        result.selectedObject->subMeshDescriptors.clear();
+        sceneSystem.ensureNodeOverrides(*result.selectedObject);
+        hierarchyState.selectedNodeIndex = -1;
       } catch (const std::exception &e) {
         std::cerr << "Failed to load mesh " << meshPath << ": " << e.what() << "\n";
       }
@@ -518,6 +593,7 @@ namespace lve {
       if (ray.valid) {
         float bestT = std::numeric_limits<float>::max();
         std::optional<LveGameObject::id_t> hitId{};
+        std::optional<int> hitNodeIndex{};
         const glm::mat4 invView = glm::inverse(view);
         const glm::vec3 camRight = glm::vec3(invView[0]);
         const glm::vec3 camUp = glm::vec3(invView[1]);
@@ -549,17 +625,74 @@ namespace lve {
               hit = true;
             }
           } else if (obj.model) {
-            const auto &bbox = obj.model->getBoundingBox();
-            glm::mat4 modelMat = obj.transform.mat4();
-            glm::mat4 invModel = glm::inverse(modelMat);
-            glm::vec3 localOrigin = glm::vec3(invModel * glm::vec4(ray.origin, 1.f));
-            glm::vec3 localDir = glm::normalize(glm::mat3(invModel) * ray.direction);
-            float tLocal = 0.f;
-            if (intersectAabbLocal(localOrigin, localDir, bbox.min, bbox.max, tLocal)) {
-              glm::vec3 hitLocal = localOrigin + localDir * tLocal;
-              glm::vec3 hitWorld = glm::vec3(modelMat * glm::vec4(hitLocal, 1.f));
-              tHitWorld = glm::length(hitWorld - ray.origin);
-              hit = true;
+            const auto &nodes = obj.model->getNodes();
+            const auto &subMeshes = obj.model->getSubMeshes();
+            if (!nodes.empty() && !subMeshes.empty()) {
+              std::vector<glm::mat4> localOverrides(nodes.size(), glm::mat4(1.f));
+              if (obj.nodeOverrides.size() == nodes.size()) {
+                for (std::size_t i = 0; i < nodes.size(); ++i) {
+                  const auto &override = obj.nodeOverrides[i];
+                  if (override.enabled) {
+                    localOverrides[i] = override.transform.mat4();
+                  }
+                }
+              }
+              std::vector<glm::mat4> nodeGlobals;
+              obj.model->computeNodeGlobals(localOverrides, nodeGlobals);
+
+              const glm::mat4 objectTransform = obj.transform.mat4();
+              for (std::size_t nodeIndex = 0; nodeIndex < nodes.size(); ++nodeIndex) {
+                const auto &node = nodes[nodeIndex];
+                if (node.meshes.empty()) continue;
+
+                bool hasNodeBounds = false;
+                glm::vec3 nodeMin;
+                glm::vec3 nodeMax;
+                const glm::mat4 nodeTransform = objectTransform * nodeGlobals[nodeIndex];
+                for (int meshIndex : node.meshes) {
+                  if (meshIndex < 0 || static_cast<std::size_t>(meshIndex) >= subMeshes.size()) {
+                    continue;
+                  }
+                  const auto &subMesh = subMeshes[static_cast<std::size_t>(meshIndex)];
+                  if (!subMesh.hasBounds) continue;
+                  glm::vec3 worldMin;
+                  glm::vec3 worldMax;
+                  transformAabb(nodeTransform, subMesh.boundsMin, subMesh.boundsMax, worldMin, worldMax);
+                  if (!hasNodeBounds) {
+                    nodeMin = worldMin;
+                    nodeMax = worldMax;
+                    hasNodeBounds = true;
+                  } else {
+                    nodeMin = glm::min(nodeMin, worldMin);
+                    nodeMax = glm::max(nodeMax, worldMax);
+                  }
+                }
+
+                if (!hasNodeBounds) continue;
+                float tHit = 0.f;
+                if (intersectAabbLocal(ray.origin, ray.direction, nodeMin, nodeMax, tHit)) {
+                  tHitWorld = tHit;
+                  hit = true;
+                  if (tHitWorld < bestT) {
+                    bestT = tHitWorld;
+                    hitId = obj.getId();
+                    hitNodeIndex = static_cast<int>(nodeIndex);
+                  }
+                }
+              }
+            } else {
+              const auto &bbox = obj.model->getBoundingBox();
+              glm::mat4 modelMat = obj.transform.mat4();
+              glm::mat4 invModel = glm::inverse(modelMat);
+              glm::vec3 localOrigin = glm::vec3(invModel * glm::vec4(ray.origin, 1.f));
+              glm::vec3 localDir = glm::normalize(glm::mat3(invModel) * ray.direction);
+              float tLocal = 0.f;
+              if (intersectAabbLocal(localOrigin, localDir, bbox.min, bbox.max, tLocal)) {
+                glm::vec3 hitLocal = localOrigin + localDir * tLocal;
+                glm::vec3 hitWorld = glm::vec3(modelMat * glm::vec4(hitLocal, 1.f));
+                tHitWorld = glm::length(hitWorld - ray.origin);
+                hit = true;
+              }
             }
           }
 
@@ -570,6 +703,9 @@ namespace lve {
         }
         if (hitId) {
           setSelectedId(hitId);
+          if (hitNodeIndex.has_value()) {
+            setSelectedNodeIndex(*hitNodeIndex);
+          }
         }
       }
     }

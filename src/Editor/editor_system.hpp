@@ -73,7 +73,12 @@ namespace lve {
     void renderPlatformWindows();
 
     std::optional<LveGameObject::id_t> getSelectedId() const { return hierarchyState.selectedId; }
-    void setSelectedId(std::optional<LveGameObject::id_t> id) { hierarchyState.selectedId = id; }
+    int getSelectedNodeIndex() const { return hierarchyState.selectedNodeIndex; }
+    void setSelectedId(std::optional<LveGameObject::id_t> id) {
+      hierarchyState.selectedId = id;
+      hierarchyState.selectedNodeIndex = -1;
+    }
+    void setSelectedNodeIndex(int index) { hierarchyState.selectedNodeIndex = index; }
     const editor::ScenePanelState &getScenePanelState() const { return scenePanelState; }
     editor::EditorHistory &getHistory() { return history; }
     const editor::EditorHistory &getHistory() const { return history; }

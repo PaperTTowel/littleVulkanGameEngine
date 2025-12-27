@@ -27,8 +27,8 @@ namespace lve {
     // Matrix corrsponds to Translate * Ry * Rx * Rz * Scale
     // Rotations correspond to Tait-bryan angles of Y(1), X(2), Z(3)
     // https://en.wikipedia.org/wiki/Euler_angles#Rotation_matrix
-    glm::mat4 mat4();
-    glm::mat3 normalMatrix();
+    glm::mat4 mat4() const;
+    glm::mat3 normalMatrix() const;
   };
 
   struct PointLightComponent {
@@ -38,6 +38,16 @@ namespace lve {
   struct GameObjectBufferData {
     glm::mat4 modelMatrix{1.f};
     glm::mat4 normalMatrix{1.f};
+  };
+
+  struct NodeTransformOverride {
+    bool enabled{false};
+    TransformComponent transform{};
+  };
+
+  struct SubMeshDescriptorCache {
+    std::array<VkDescriptorSet, LveSwapChain::MAX_FRAMES_IN_FLIGHT> sets{};
+    std::array<const LveTexture*, LveSwapChain::MAX_FRAMES_IN_FLIGHT> textures{};
   };
 
   class LveGameObjectManager; // forward declare game object manager class
@@ -69,6 +79,8 @@ namespace lve {
     bool transformDirty{true};
     std::array<VkDescriptorSet, LveSwapChain::MAX_FRAMES_IN_FLIGHT> descriptorSets{};
     std::array<const LveTexture*, LveSwapChain::MAX_FRAMES_IN_FLIGHT> descriptorTextures{};
+    std::vector<NodeTransformOverride> nodeOverrides{};
+    std::vector<SubMeshDescriptorCache> subMeshDescriptors{};
 
     LveGameObject(LveGameObject &&) = default;
     LveGameObject(const LveGameObject &) = delete;
@@ -140,6 +152,7 @@ namespace lve {
 
     void updateFrame(LveGameObject &character, int maxFrames, float frameTime, float animationSpeed);
     void updateBuffer(int frameIndex);
+    void resetDescriptorCaches();
 
     LveGameObject::Map gameObjects{};
     std::vector<std::unique_ptr<LveBuffer>> uboBuffers{LveSwapChain::MAX_FRAMES_IN_FLIGHT};

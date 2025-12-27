@@ -154,6 +154,33 @@ namespace lve {
       return blocks;
     }
 
+    std::vector<std::string> extractObjectArrayBlocks(const std::string &content, const std::string &key) {
+      std::vector<std::string> blocks;
+      std::size_t pos = content.find("\"" + key + "\"");
+      if (pos == std::string::npos) return blocks;
+      pos = content.find('[', pos);
+      if (pos == std::string::npos) return blocks;
+
+      int depth = 0;
+      std::size_t startObj = std::string::npos;
+      for (std::size_t i = pos; i < content.size(); ++i) {
+        char c = content[i];
+        if (c == '{') {
+          if (depth == 0) startObj = i;
+          depth++;
+        } else if (c == '}') {
+          depth--;
+          if (depth == 0 && startObj != std::string::npos) {
+            blocks.emplace_back(content.substr(startObj, i - startObj + 1));
+            startObj = std::string::npos;
+          }
+        } else if (c == ']' && depth == 0) {
+          break;
+        }
+      }
+      return blocks;
+    }
+
     void serializeEntity(std::ostringstream &ss, const SceneEntity &e, int level) {
       ss << indent(level) << "{\n";
       ss << indent(level + 1) << "\"id\": \"" << e.id << "\",\n";
@@ -179,8 +206,27 @@ namespace lve {
         const auto &m = *e.mesh;
         ss << ",\n" << indent(level + 1) << "\"mesh\": {\n";
         ss << indent(level + 2) << "\"model\": \"" << m.model << "\",\n";
-        ss << indent(level + 2) << "\"material\": \"" << m.material << "\"\n";
-        ss << indent(level + 1) << "}";
+        ss << indent(level + 2) << "\"material\": \"" << m.material << "\"";
+        if (!m.nodeOverrides.empty()) {
+          ss << ",\n" << indent(level + 2) << "\"nodeOverrides\": [\n";
+          for (std::size_t i = 0; i < m.nodeOverrides.size(); ++i) {
+            const auto &o = m.nodeOverrides[i];
+            ss << indent(level + 3) << "{\n";
+            ss << indent(level + 4) << "\"node\": " << o.node << ",\n";
+            ss << indent(level + 4) << "\"position\": "; writeVec3(ss, o.transform.position); ss << ",\n";
+            ss << indent(level + 4) << "\"rotation\": "; writeVec3(ss, o.transform.rotation); ss << ",\n";
+            ss << indent(level + 4) << "\"scale\": "; writeVec3(ss, o.transform.scale); ss << "\n";
+            ss << indent(level + 3) << "}";
+            if (i + 1 < m.nodeOverrides.size()) {
+              ss << ",";
+            }
+            ss << "\n";
+          }
+          ss << indent(level + 2) << "]\n";
+          ss << indent(level + 1) << "}";
+        } else {
+          ss << "\n" << indent(level + 1) << "}";
+        }
       }
 
       if (e.light) {
@@ -269,6 +315,17 @@ namespace lve {
         MeshComponent mc{};
         mc.model = parseString(block, "model", mc.model);
         mc.material = parseString(block, "material", mc.material);
+        const auto overrideBlocks = extractObjectArrayBlocks(block, "nodeOverrides");
+        for (const auto &overrideBlock : overrideBlocks) {
+          MeshComponent::NodeOverride ov{};
+          ov.node = parseInt(overrideBlock, "node", ov.node);
+          ov.transform.position = parseVec3(overrideBlock, "position", ov.transform.position);
+          ov.transform.rotation = parseVec3(overrideBlock, "rotation", ov.transform.rotation);
+          ov.transform.scale = parseVec3(overrideBlock, "scale", ov.transform.scale);
+          if (ov.node >= 0) {
+            mc.nodeOverrides.push_back(std::move(ov));
+          }
+        }
         e.mesh = mc;
       }
 

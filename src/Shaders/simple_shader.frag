@@ -24,11 +24,9 @@ layout (set = 0, binding = 0) uniform GlobalUbo {
 layout (set = 1, binding = 1) uniform sampler2D diffuseMap;
 
 layout(push_constant) uniform Push {
-  int useTexture;   // 0 = vertex color, 1 = texture sample, 2 = texture with flip
-  int currentFrame;
-  int objectState;
-  int direction;
-  int debugView;    // 1 = visualize normals, 0 = regular shading
+  mat4 modelMatrix;
+  ivec4 flags0; // useTexture, currentFrame, objectState, direction
+  ivec4 flags1; // debugView, padding
 } push;
 
 void main() {
@@ -37,7 +35,7 @@ void main() {
   vec3 surfaceNormal = normalize(fragNormalWorld);
 
   // Debug normal view
-  if (push.debugView == 1) {
+  if (push.flags1.x == 1) {
     vec3 normalColor = surfaceNormal * 0.5 + 0.5;
     outColor = vec4(normalColor, 1.0);
     return;
@@ -68,20 +66,20 @@ void main() {
   // sprite texture animation
   vec2 uvOffset = vec2(0.0);
   float frameWidth = 1.0 / 6.0; // default columns
-  if (push.objectState == 1) {
+  if (push.flags0.z == 1) {
     frameWidth = 1.0;
   }
   float frameHeight = 1.0 / 2.0; // rows
-  uvOffset.x = frameWidth * float(push.currentFrame);
-  uvOffset.y = frameHeight * float(push.objectState);
+  uvOffset.x = frameWidth * float(push.flags0.y);
+  uvOffset.y = frameHeight * float(push.flags0.z);
   vec2 animatedUv = fragUv + uvOffset;
-  if (push.direction == 2) { // LEFT
+  if (push.flags0.w == 2) { // LEFT
     animatedUv.x = 1.0 - animatedUv.x;
   }
 
   vec3 color = fragColor;
   vec4 sampledColor = texture(diffuseMap, animatedUv);
-  if (push.useTexture == 1) {
+  if (push.flags0.x == 1) {
     color = sampledColor.xyz;
   }
   

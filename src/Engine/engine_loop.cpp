@@ -116,6 +116,7 @@ namespace lve {
         editorSystem.onRenderPassChanged(
           renderContext.getSwapChainRenderPass(),
           static_cast<uint32_t>(renderContext.getSwapChainImageCount()));
+        gameObjectManager.resetDescriptorCaches();
       }
       if (commandBuffer) {
         renderContext.ensureOffscreenTargets(

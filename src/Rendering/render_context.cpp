@@ -85,6 +85,9 @@ namespace lve {
     auto commandBuffer = lveRenderer.beginFrame();
     if (lveRenderer.wasSwapChainRecreated()) {
       vkDeviceWaitIdle(lveDevice.device());
+      if (objectDescriptorPool) {
+        objectDescriptorPool->resetPool();
+      }
       destroyOffscreenTarget(sceneViewTarget);
       destroyOffscreenTarget(gameViewTarget);
       destroyOffscreenRenderPass();

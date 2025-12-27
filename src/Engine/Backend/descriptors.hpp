@@ -88,7 +88,7 @@ class LveDescriptorWriter {
  public:
   LveDescriptorWriter(LveDescriptorSetLayout &setLayout, LveDescriptorPool &pool);
  
-  LveDescriptorWriter &writeBuffer(uint32_t binding, VkDescriptorBufferInfo *bufferInfo);
+  LveDescriptorWriter &writeBuffer(uint32_t binding, const VkDescriptorBufferInfo *bufferInfo);
   LveDescriptorWriter &writeImage(uint32_t binding, VkDescriptorImageInfo *imageInfo);
  
   bool build(VkDescriptorSet &set);

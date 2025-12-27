@@ -16,6 +16,14 @@ LveTexture::LveTexture(LveDevice &device, const std::string &textureFilepath) : 
   updateDescriptor();
 }
 
+LveTexture::LveTexture(LveDevice &device, const unsigned char *rgbaPixels, int width, int height)
+    : mDevice{device} {
+  createTextureImageFromPixels(rgbaPixels, width, height);
+  createTextureImageView(VK_IMAGE_VIEW_TYPE_2D);
+  createTextureSampler();
+  updateDescriptor();
+}
+
 LveTexture::LveTexture(
     LveDevice &device,
     VkFormat format,
@@ -113,6 +121,31 @@ std::unique_ptr<LveTexture> LveTexture::createTextureFromFile(
   return std::make_unique<LveTexture>(device, filepath);
 }
 
+std::unique_ptr<LveTexture> LveTexture::createTextureFromMemory(
+    LveDevice &device, const unsigned char *data, std::size_t size) {
+  int texWidth = 0;
+  int texHeight = 0;
+  int texChannels = 0;
+  stbi_uc *pixels = stbi_load_from_memory(
+      data,
+      static_cast<int>(size),
+      &texWidth,
+      &texHeight,
+      &texChannels,
+      STBI_rgb_alpha);
+  if (!pixels) {
+    throw std::runtime_error("failed to load texture from memory!");
+  }
+  auto texture = std::make_unique<LveTexture>(device, pixels, texWidth, texHeight);
+  stbi_image_free(pixels);
+  return texture;
+}
+
+std::unique_ptr<LveTexture> LveTexture::createTextureFromRgba(
+    LveDevice &device, const unsigned char *rgbaPixels, int width, int height) {
+  return std::make_unique<LveTexture>(device, rgbaPixels, width, height);
+}
+
 void LveTexture::updateDescriptor() {
   mDescriptor.sampler = mTextureSampler;
   mDescriptor.imageView = mTextureImageView;
@@ -124,13 +157,19 @@ void LveTexture::createTextureImage(const std::string &filepath) {
   stbi_set_flip_vertically_on_load(1);
   stbi_uc *pixels =
       stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-  VkDeviceSize imageSize = texWidth * texHeight * 4;
-
   if (!pixels) {
     throw std::runtime_error("failed to load texture image!");
   }
+  createTextureImageFromPixels(pixels, texWidth, texHeight);
+  stbi_image_free(pixels);
+}
 
-  // mMipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
+void LveTexture::createTextureImageFromPixels(const unsigned char *pixels, int texWidth, int texHeight) {
+  if (!pixels || texWidth <= 0 || texHeight <= 0) {
+    throw std::runtime_error("invalid texture pixel data!");
+  }
+
+  VkDeviceSize imageSize = static_cast<VkDeviceSize>(texWidth) * texHeight * 4;
   mMipLevels = 1;
 
   VkBuffer stagingBuffer;
@@ -147,8 +186,6 @@ void LveTexture::createTextureImage(const std::string &filepath) {
   vkMapMemory(mDevice.device(), stagingBufferMemory, 0, imageSize, 0, &data);
   memcpy(data, pixels, static_cast<size_t>(imageSize));
   vkUnmapMemory(mDevice.device(), stagingBufferMemory);
-
-  stbi_image_free(pixels);
 
   mFormat = VK_FORMAT_R8G8B8A8_SRGB;
   mExtent = {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1};

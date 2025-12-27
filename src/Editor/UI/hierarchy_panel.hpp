@@ -10,6 +10,7 @@ namespace lve::editor {
 
   struct HierarchyPanelState {
     std::optional<LveGameObject::id_t> selectedId{};
+    int selectedNodeIndex{-1};
   };
 
   struct HierarchyActions {

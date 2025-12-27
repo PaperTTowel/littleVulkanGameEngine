@@ -31,6 +31,10 @@ namespace lve::editor {
     bool nameChanged{false};
     std::string beforeName{};
     std::string afterName{};
+    bool nodeOverridesChanged{false};
+    bool nodeOverridesCommitted{false};
+    std::vector<NodeTransformOverride> beforeNodeOverrides{};
+    std::vector<NodeTransformOverride> afterNodeOverrides{};
   };
 
   InspectorActions BuildInspectorPanel(
@@ -42,6 +46,7 @@ namespace lve::editor {
     bool *open,
     const GizmoContext &gizmoContext,
     int gizmoOperation,
-    int gizmoMode);
+    int gizmoMode,
+    int &selectedNodeIndex);
 
 } // namespace lve::editor

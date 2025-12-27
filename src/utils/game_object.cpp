@@ -6,7 +6,7 @@
 
 namespace lve {
 
-  glm::mat4 TransformComponent::mat4() {
+  glm::mat4 TransformComponent::mat4() const {
     const float c3 = glm::cos(rotation.z);
     const float s3 = glm::sin(rotation.z);
     const float c2 = glm::cos(rotation.x);
@@ -35,7 +35,7 @@ namespace lve {
       {translation.x, translation.y, translation.z, 1.0f}};
   }
 
-  glm::mat3 TransformComponent::normalMatrix() {
+  glm::mat3 TransformComponent::normalMatrix() const {
     const float c3 = glm::cos(rotation.z);
     const float s3 = glm::sin(rotation.z);
     const float c2 = glm::cos(rotation.x);
@@ -198,6 +198,18 @@ namespace lve {
     if (anyDirty) {
       for (auto &buffer : uboBuffers) {
         buffer->flush();
+      }
+    }
+  }
+
+  void LveGameObjectManager::resetDescriptorCaches() {
+    for (auto &kv : gameObjects) {
+      auto &obj = kv.second;
+      obj.descriptorSets.fill(VK_NULL_HANDLE);
+      obj.descriptorTextures.fill(nullptr);
+      for (auto &cache : obj.subMeshDescriptors) {
+        cache.sets.fill(VK_NULL_HANDLE);
+        cache.textures.fill(nullptr);
       }
     }
   }
