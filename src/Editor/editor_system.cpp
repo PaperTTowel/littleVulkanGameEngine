@@ -201,13 +201,13 @@ namespace lve {
     gizmoMode = static_cast<int>(ImGuizmo::LOCAL);
   }
 
-  void EditorSystem::init(VkRenderPass renderPass) {
-    imgui.init(renderPass);
+  void EditorSystem::init(VkRenderPass renderPass, uint32_t imageCount) {
+    imgui.init(renderPass, imageCount);
   }
 
-  void EditorSystem::onRenderPassChanged(VkRenderPass renderPass) {
+  void EditorSystem::onRenderPassChanged(VkRenderPass renderPass, uint32_t imageCount) {
     imgui.shutdown();
-    imgui.init(renderPass);
+    imgui.init(renderPass, imageCount);
   }
 
   void EditorSystem::shutdown() {

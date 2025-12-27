@@ -37,7 +37,9 @@ namespace lve {
 
     LveCamera editorCamera{};
     LveCamera gameCamera{};
-    editorSystem.init(renderContext.getSwapChainRenderPass());
+    editorSystem.init(
+      renderContext.getSwapChainRenderPass(),
+      static_cast<uint32_t>(renderContext.getSwapChainImageCount()));
 
     auto &viewerObject = gameObjectManager.createGameObject();
     viewerObject.transform.translation.z = -2.5f;
@@ -111,7 +113,9 @@ namespace lve {
 
       auto commandBuffer = renderContext.beginFrame();
       if (renderContext.wasSwapChainRecreated()) {
-        editorSystem.onRenderPassChanged(renderContext.getSwapChainRenderPass());
+        editorSystem.onRenderPassChanged(
+          renderContext.getSwapChainRenderPass(),
+          static_cast<uint32_t>(renderContext.getSwapChainImageCount()));
       }
       if (commandBuffer) {
         renderContext.ensureOffscreenTargets(
@@ -150,7 +154,6 @@ namespace lve {
         // rendering toggles pushed to shader systems
         renderContext.simpleSystem().setWireframe(wireframeEnabled);
         renderContext.simpleSystem().setNormalView(normalViewEnabled);
-        renderContext.spriteSystem().setBillboardMode(character.billboardMode);
 
         const uint32_t gameWidth = gameViewInfo.width > 0 ? gameViewInfo.width : lveWindow.getExtent().width;
         const uint32_t gameHeight = gameViewInfo.height > 0 ? gameViewInfo.height : lveWindow.getExtent().height;

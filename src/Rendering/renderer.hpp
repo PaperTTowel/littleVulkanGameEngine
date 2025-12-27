@@ -22,6 +22,7 @@ namespace lve{
         float getAspectRatio() const { return lveSwapChain->extentAspectRatio(); }
         VkExtent2D getSwapChainExtent() const { return lveSwapChain->getSwapChainExtent(); }
         VkFormat getSwapChainImageFormat() const { return lveSwapChain->getSwapChainImageFormat(); }
+        size_t getSwapChainImageCount() const { return lveSwapChain->imageCount(); }
         bool isFrameInProgress() const { return isFrameStarted; }
 
         VkCommandBuffer getCurrentCommandBuffer() const {

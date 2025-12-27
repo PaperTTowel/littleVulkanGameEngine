@@ -46,8 +46,8 @@ namespace lve {
   public:
     EditorSystem(LveWindow &window, LveDevice &device);
 
-    void init(VkRenderPass renderPass);
-    void onRenderPassChanged(VkRenderPass renderPass);
+    void init(VkRenderPass renderPass, uint32_t imageCount);
+    void onRenderPassChanged(VkRenderPass renderPass, uint32_t imageCount);
     void shutdown();
 
     EditorFrameResult update(

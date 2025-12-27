@@ -120,12 +120,16 @@ namespace lve {
       if (descriptorSet == VK_NULL_HANDLE || obj.descriptorTextures[frameIndex] != currentTexture) {
         auto bufferInfo = obj.getBufferInfo(frameIndex);
         auto imageInfo = obj.diffuseMap->getImageInfo();
-        VkDescriptorSet newSet{};
-        LveDescriptorWriter(*renderSystemLayout, frameInfo.frameDescriptorPool)
-          .writeBuffer(0, &bufferInfo)
-          .writeImage(1, &imageInfo)
-          .build(newSet);
-        descriptorSet = newSet;
+        LveDescriptorWriter writer(*renderSystemLayout, frameInfo.frameDescriptorPool);
+        writer.writeBuffer(0, &bufferInfo)
+          .writeImage(1, &imageInfo);
+        if (descriptorSet == VK_NULL_HANDLE) {
+          if (!writer.build(descriptorSet)) {
+            throw std::runtime_error("failed to build sprite descriptor set");
+          }
+        } else {
+          writer.overwrite(descriptorSet);
+        }
         obj.descriptorTextures[frameIndex] = currentTexture;
       }
 
@@ -140,7 +144,7 @@ namespace lve {
         nullptr);
 
       glm::mat4 modelMat = obj.transform.mat4();
-      if (billboardMode != BillboardMode::None) {
+      if (obj.billboardMode != BillboardMode::None) {
         // build billboard rotation using camera inverse view (world basis)
         glm::mat4 invView = frameInfo.camera.getInverseView();
         glm::vec3 camRight{invView[0][0], invView[0][1], invView[0][2]};
@@ -150,7 +154,7 @@ namespace lve {
         camForward = -camForward;
 
         glm::vec3 right = glm::normalize(camRight);
-        glm::vec3 up = (billboardMode == BillboardMode::Cylindrical) ? glm::vec3(0.f, 1.f, 0.f) : camUp;
+        glm::vec3 up = (obj.billboardMode == BillboardMode::Cylindrical) ? glm::vec3(0.f, 1.f, 0.f) : camUp;
         glm::vec3 forward = glm::normalize(camForward);
 
         // orthonormalize

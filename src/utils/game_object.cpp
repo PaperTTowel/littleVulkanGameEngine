@@ -1,5 +1,6 @@
 #include "utils/game_object.hpp"
 
+#include <algorithm>
 #include <numeric>
 #include <stdexcept>
 
@@ -77,10 +78,17 @@ namespace lve {
     if (id >= MAX_GAME_OBJECTS) {
       throw std::runtime_error("GameObject id exceeds MAX_GAME_OBJECTS");
     }
+    auto freeIt = std::find(freeIds.begin(), freeIds.end(), id);
+    if (freeIt != freeIds.end()) {
+      freeIds.erase(freeIt);
+    }
     auto gameObject = LveGameObject{id, *this};
     gameObject.diffuseMap = textureDefault;
     gameObjects.emplace(id, std::move(gameObject));
     if (id >= currentId) {
+      for (LveGameObject::id_t nextId = currentId; nextId < id; ++nextId) {
+        freeIds.push_back(nextId);
+      }
       currentId = id + 1;
     }
     return gameObjects.at(id);
@@ -124,12 +132,14 @@ namespace lve {
       return false;
     }
     gameObjects.erase(it);
+    freeIds.push_back(id);
     return true;
   }
 
   void LveGameObjectManager::clearAll() {
     gameObjects.clear();
     currentId = 0;
+    freeIds.clear();
   }
 
   void LveGameObjectManager::clearAllExcept(std::optional<LveGameObject::id_t> protectedId) {
@@ -150,7 +160,21 @@ namespace lve {
     for (auto &kv : gameObjects) {
       if (kv.first > maxId) maxId = kv.first;
     }
-    currentId = maxId + 1;
+    currentId = gameObjects.empty() ? 0 : (maxId + 1);
+    freeIds.clear();
+    if (currentId > 0) {
+      std::vector<bool> used(currentId, false);
+      for (const auto &kv : gameObjects) {
+        if (kv.first < currentId) {
+          used[kv.first] = true;
+        }
+      }
+      for (LveGameObject::id_t id = 0; id < currentId; ++id) {
+        if (!used[id]) {
+          freeIds.push_back(id);
+        }
+      }
+    }
   }
 
   void LveGameObjectManager::updateBuffer(int frameIndex) {

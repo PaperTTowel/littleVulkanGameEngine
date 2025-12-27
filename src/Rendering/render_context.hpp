@@ -32,6 +32,7 @@ namespace lve {
 
     bool wasSwapChainRecreated();
     VkRenderPass getSwapChainRenderPass() const;
+    size_t getSwapChainImageCount() const { return lveRenderer.getSwapChainImageCount(); }
     VkDescriptorSet getSceneViewDescriptor() const;
     VkDescriptorSet getGameViewDescriptor() const;
     VkExtent2D getSceneViewExtent() const;

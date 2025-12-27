@@ -15,6 +15,7 @@
 #include <optional>
 #include <array>
 #include <unordered_map>
+#include <vector>
 
 namespace lve {
 
@@ -105,8 +106,15 @@ namespace lve {
     LveGameObjectManager &operator=(LveGameObjectManager &&) = delete;
 
     LveGameObject &createGameObject() {
-      assert(currentId < MAX_GAME_OBJECTS && "Max game object count exceeded!");
-      auto gameObject = LveGameObject{currentId++, *this};
+      LveGameObject::id_t newId = 0;
+      if (!freeIds.empty()) {
+        newId = freeIds.back();
+        freeIds.pop_back();
+      } else {
+        assert(currentId < MAX_GAME_OBJECTS && "Max game object count exceeded!");
+        newId = currentId++;
+      }
+      auto gameObject = LveGameObject{newId, *this};
       auto gameObjectId = gameObject.getId();
       gameObject.diffuseMap = textureDefault;
       gameObjects.emplace(gameObjectId, std::move(gameObject));
@@ -140,6 +148,7 @@ namespace lve {
 
   private:
     LveGameObject::id_t currentId = 0;
+    std::vector<LveGameObject::id_t> freeIds;
     std::shared_ptr<LveTexture> textureDefault;
   };
 } // namespace lve

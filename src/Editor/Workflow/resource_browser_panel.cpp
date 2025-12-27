@@ -14,10 +14,19 @@ namespace lve::editor {
 
   namespace {
 
+    std::string toLowerCopy(const std::string &value) {
+      std::string out;
+      out.reserve(value.size());
+      for (char ch : value) {
+        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+      }
+      return out;
+    }
+
     bool hasExtension(const std::filesystem::path &path, const std::vector<std::string> &exts) {
-      const std::string ext = path.extension().string();
+      const std::string ext = toLowerCopy(path.extension().string());
       for (const auto &candidate : exts) {
-        if (_stricmp(ext.c_str(), candidate.c_str()) == 0) {
+        if (ext == toLowerCopy(candidate)) {
           return true;
         }
       }
@@ -26,15 +35,6 @@ namespace lve::editor {
 
     std::string toGenericString(const std::filesystem::path &p) {
       return p.generic_string();
-    }
-
-    std::string toLowerCopy(const std::string &value) {
-      std::string out;
-      out.reserve(value.size());
-      for (char ch : value) {
-        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-      }
-      return out;
     }
 
     bool matchesFilter(const std::filesystem::path &path, const std::string &filter) {

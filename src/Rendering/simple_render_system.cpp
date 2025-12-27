@@ -119,12 +119,16 @@ namespace lve {
       if (gameObjectDescriptorSet == VK_NULL_HANDLE || obj.descriptorTextures[frameIndex] != currentTexture) {
         auto bufferInfo = obj.getBufferInfo(frameIndex);
         auto imageInfo = obj.diffuseMap->getImageInfo();
-        VkDescriptorSet newSet{};
-        LveDescriptorWriter(*renderSystemLayout, frameInfo.frameDescriptorPool)
-          .writeBuffer(0, &bufferInfo)
-          .writeImage(1, &imageInfo)
-          .build(newSet);
-        gameObjectDescriptorSet = newSet;
+        LveDescriptorWriter writer(*renderSystemLayout, frameInfo.frameDescriptorPool);
+        writer.writeBuffer(0, &bufferInfo)
+          .writeImage(1, &imageInfo);
+        if (gameObjectDescriptorSet == VK_NULL_HANDLE) {
+          if (!writer.build(gameObjectDescriptorSet)) {
+            throw std::runtime_error("failed to build game object descriptor set");
+          }
+        } else {
+          writer.overwrite(gameObjectDescriptorSet);
+        }
         obj.descriptorTextures[frameIndex] = currentTexture;
       }
 
