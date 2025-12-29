@@ -1,13 +1,13 @@
 #pragma once
 
-#include "Engine/Backend/descriptors.hpp"
-#include "Engine/Backend/device.hpp"
-#include "Engine/Backend/buffer.hpp"
-#include "Rendering/frame_info.hpp"
-#include "Rendering/point_light_system.hpp"
-#include "Rendering/renderer.hpp"
-#include "Rendering/simple_render_system.hpp"
-#include "Rendering/sprite_render_system.hpp"
+#include "Engine/Backend/Vulkan/Core/descriptors.hpp"
+#include "Engine/Backend/Vulkan/Core/device.hpp"
+#include "Engine/Backend/Vulkan/Core/buffer.hpp"
+#include "Engine/Backend/Vulkan/Render/frame_info.hpp"
+#include "Engine/Backend/Vulkan/Render/point_light_system.hpp"
+#include "Engine/Backend/Vulkan/Render/renderer.hpp"
+#include "Engine/Backend/Vulkan/Render/simple_render_system.hpp"
+#include "Engine/Backend/Vulkan/Render/sprite_render_system.hpp"
 
 // std
 #include <cstdint>
@@ -30,7 +30,8 @@ namespace lve {
     void endGameViewRenderPass(VkCommandBuffer commandBuffer);
     void ensureOffscreenTargets(uint32_t sceneWidth, uint32_t sceneHeight, uint32_t gameWidth, uint32_t gameHeight);
 
-    bool wasSwapChainRecreated();
+    bool wasSwapChainRecreated() const;
+    void clearSwapChainRecreated();
     VkRenderPass getSwapChainRenderPass() const;
     size_t getSwapChainImageCount() const { return lveRenderer.getSwapChainImageCount(); }
     VkDescriptorSet getSceneViewDescriptor() const;
@@ -88,3 +89,5 @@ namespace lve {
     bool swapChainRecreated{false};
   };
 } // namespace lve
+
+

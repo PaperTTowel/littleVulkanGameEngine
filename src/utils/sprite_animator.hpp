@@ -1,7 +1,7 @@
 #pragma once
 
 #include "utils/game_object.hpp"
-#include "Engine/Backend/device.hpp"
+#include "Engine/Backend/render_assets.hpp"
 #include "utils/sprite_metadata.hpp"
 
 // std
@@ -13,7 +13,7 @@ namespace lve {
 
   class SpriteAnimator {
   public:
-    explicit SpriteAnimator(LveDevice &device, SpriteMetadata meta);
+    explicit SpriteAnimator(backend::RenderAssetFactory &assets, SpriteMetadata meta);
 
     bool applySpriteState(LveGameObject &character, const std::string &stateName);
     bool applySpriteState(LveGameObject &character, ObjectState desiredState);
@@ -21,12 +21,13 @@ namespace lve {
     const SpriteMetadata &getMetadata() const { return metadata; }
 
   private:
-    std::shared_ptr<LveTexture> loadTextureCached(const std::string &path);
+    std::shared_ptr<backend::RenderTexture> loadTextureCached(const std::string &path);
 
-    LveDevice &device;
+    backend::RenderAssetFactory &assets;
     SpriteMetadata metadata;
-    std::unordered_map<std::string, std::shared_ptr<LveTexture>> textureCache;
+    std::unordered_map<std::string, std::shared_ptr<backend::RenderTexture>> textureCache;
     std::string currentTexturePath;
   };
 
 } // namespace lve
+

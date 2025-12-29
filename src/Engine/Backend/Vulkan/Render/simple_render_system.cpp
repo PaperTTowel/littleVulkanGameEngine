@@ -1,4 +1,7 @@
-﻿#include "simple_render_system.hpp"
+#include "simple_render_system.hpp"
+
+#include "Engine/Backend/Vulkan/Render/model.hpp"
+#include "Engine/Backend/Vulkan/Render/texture.hpp"
 
 // libs
 #define GLM_FORCE_RADIANS
@@ -112,25 +115,40 @@ namespace lve {
       auto &obj = *objPtr;
       if (obj.isSprite) continue;
       if (obj.model == nullptr) continue;
+      auto *model = static_cast<LveModel*>(obj.model.get());
+      if (!model) continue;
 
       const int frameIndex = frameInfo.frameIndex;
       const auto bufferInfo = obj.getBufferInfo(frameIndex);
-      const LveTexture *overrideTexture = obj.material ? obj.material->getBaseColorTexture().get() : nullptr;
+      VkDescriptorBufferInfo vkBufferInfo{};
+      vkBufferInfo.buffer = reinterpret_cast<VkBuffer>(bufferInfo.buffer);
+      vkBufferInfo.offset = bufferInfo.offset;
+      vkBufferInfo.range = bufferInfo.range;
+      const LveTexture *overrideTexture = obj.material
+        ? static_cast<const LveTexture*>(obj.material->getBaseColorTexture())
+        : nullptr;
       const bool hasOverrideTexture = overrideTexture != nullptr;
       const glm::vec4 baseColorFactor = obj.material
         ? obj.material->getData().factors.baseColor
         : glm::vec4(1.f);
 
-      obj.model->bind(frameInfo.commandBuffer);
+      model->bind(frameInfo.commandBuffer);
 
       const auto &nodes = obj.model->getNodes();
       if (nodes.empty()) {
-        VkDescriptorSet &gameObjectDescriptorSet = obj.descriptorSets[frameIndex];
-        const LveTexture *currentTexture = hasOverrideTexture ? overrideTexture : obj.diffuseMap.get();
-        if (gameObjectDescriptorSet == VK_NULL_HANDLE || obj.descriptorTextures[frameIndex] != currentTexture) {
+        auto &descriptorHandle = obj.descriptorSets[frameIndex];
+        VkDescriptorSet gameObjectDescriptorSet = reinterpret_cast<VkDescriptorSet>(descriptorHandle);
+        const LveTexture *currentTexture = hasOverrideTexture
+          ? overrideTexture
+          : static_cast<const LveTexture*>(obj.diffuseMap.get());
+        if (!currentTexture) {
+          continue;
+        }
+        if (gameObjectDescriptorSet == VK_NULL_HANDLE ||
+            obj.descriptorTextures[frameIndex] != currentTexture) {
           auto imageInfo = currentTexture->getImageInfo();
           LveDescriptorWriter writer(*renderSystemLayout, frameInfo.frameDescriptorPool);
-          writer.writeBuffer(0, &bufferInfo)
+          writer.writeBuffer(0, &vkBufferInfo)
             .writeImage(1, &imageInfo);
           if (gameObjectDescriptorSet == VK_NULL_HANDLE) {
             if (!writer.build(gameObjectDescriptorSet)) {
@@ -139,6 +157,7 @@ namespace lve {
           } else {
             writer.overwrite(gameObjectDescriptorSet);
           }
+          descriptorHandle = reinterpret_cast<backend::DescriptorSetHandle>(gameObjectDescriptorSet);
           obj.descriptorTextures[frameIndex] = currentTexture;
         }
 
@@ -170,7 +189,7 @@ namespace lve {
           sizeof(SimplePushConstantData),
           &push);
 
-        obj.model->draw(frameInfo.commandBuffer);
+        model->draw(frameInfo.commandBuffer);
         continue;
       }
 
@@ -205,19 +224,24 @@ namespace lve {
             continue;
           }
           const auto &subMesh = subMeshes[static_cast<std::size_t>(meshIndex)];
-          const LveTexture *subMeshTexture = obj.model->getDiffuseTextureForSubMesh(subMesh);
+          const LveTexture *subMeshTexture = static_cast<const LveTexture*>(
+            obj.model->getDiffuseTextureForSubMesh(subMesh));
           const LveTexture *currentTexture = hasOverrideTexture
             ? overrideTexture
-            : (subMeshTexture ? subMeshTexture : obj.diffuseMap.get());
+            : (subMeshTexture ? subMeshTexture : static_cast<const LveTexture*>(obj.diffuseMap.get()));
+          if (!currentTexture) {
+            continue;
+          }
           const int useTexture = hasOverrideTexture
             ? 1
             : ((obj.enableTextureType && subMeshTexture != nullptr) ? 1 : 0);
           auto &cache = obj.subMeshDescriptors[static_cast<std::size_t>(meshIndex)];
-          VkDescriptorSet &descriptorSet = cache.sets[frameIndex];
+          auto &descriptorHandle = cache.sets[frameIndex];
+          VkDescriptorSet descriptorSet = reinterpret_cast<VkDescriptorSet>(descriptorHandle);
           if (descriptorSet == VK_NULL_HANDLE || cache.textures[frameIndex] != currentTexture) {
             auto imageInfo = currentTexture->getImageInfo();
             LveDescriptorWriter writer(*renderSystemLayout, frameInfo.frameDescriptorPool);
-            writer.writeBuffer(0, &bufferInfo)
+            writer.writeBuffer(0, &vkBufferInfo)
               .writeImage(1, &imageInfo);
             if (descriptorSet == VK_NULL_HANDLE) {
               if (!writer.build(descriptorSet)) {
@@ -226,6 +250,7 @@ namespace lve {
             } else {
               writer.overwrite(descriptorSet);
             }
+            descriptorHandle = reinterpret_cast<backend::DescriptorSetHandle>(descriptorSet);
             cache.textures[frameIndex] = currentTexture;
           }
 
@@ -257,7 +282,7 @@ namespace lve {
             sizeof(SimplePushConstantData),
             &push);
 
-          obj.model->drawSubMesh(frameInfo.commandBuffer, subMesh);
+          model->drawSubMesh(frameInfo.commandBuffer, subMesh);
         }
       }
     }

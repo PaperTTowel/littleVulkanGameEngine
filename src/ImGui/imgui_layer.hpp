@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Engine/Backend/device.hpp"
-#include "Engine/Backend/window.hpp"
-#include "Engine/Backend/swap_chain.hpp"
+#include "Engine/Backend/Vulkan/Core/device.hpp"
+#include "Engine/Backend/Vulkan/Core/window.hpp"
+#include "Engine/Backend/Vulkan/Core/swap_chain.hpp"
 
 #include <vulkan/vulkan.h>
 #include <glm/vec3.hpp>
@@ -33,3 +33,4 @@ private:
   size_t frameTimeOffset{0};
 };
 } // namespace lve
+

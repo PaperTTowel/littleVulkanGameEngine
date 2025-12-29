@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ImGui/imgui_layer.hpp"
+#include "Engine/Backend/editor_render_backend.hpp"
 #include "Editor/UI/hierarchy_panel.hpp"
 #include "Editor/UI/scene_panel.hpp"
 #include "Editor/Workflow/resource_browser_panel.hpp"
@@ -9,11 +9,11 @@
 #include "Editor/viewport_info.hpp"
 
 // std
+#include <cstdint>
 #include <optional>
 #include <vector>
 
 namespace lve {
-  class LveDevice;
   class SceneSystem;
 
   struct EditorFrameResult {
@@ -31,10 +31,10 @@ namespace lve {
 
   class EditorSystem {
   public:
-    EditorSystem(LveWindow &window, LveDevice &device);
+    explicit EditorSystem(backend::EditorRenderBackend &renderBackend);
 
-    void init(VkRenderPass renderPass, uint32_t imageCount);
-    void onRenderPassChanged(VkRenderPass renderPass, uint32_t imageCount);
+    void init(backend::RenderPassHandle renderPass, std::uint32_t imageCount);
+    void onRenderPassChanged(backend::RenderPassHandle renderPass, std::uint32_t imageCount);
     void shutdown();
 
     EditorFrameResult update(
@@ -50,12 +50,12 @@ namespace lve {
       SpriteAnimator *&animator,
       const glm::mat4 &view,
       const glm::mat4 &projection,
-      VkExtent2D viewportExtent,
+      backend::RenderExtent viewportExtent,
       editor::ResourceBrowserState &resourceBrowserState,
       void *sceneViewTextureId,
       void *gameViewTextureId);
 
-    void render(VkCommandBuffer commandBuffer);
+    void render(backend::CommandBufferHandle commandBuffer);
     void renderPlatformWindows();
 
     std::optional<LveGameObject::id_t> getSelectedId() const { return hierarchyState.selectedId; }
@@ -83,8 +83,7 @@ namespace lve {
       std::string error{};
     };
 
-    ImGuiLayer imgui;
-    LveDevice &device;
+    backend::EditorRenderBackend &renderBackend;
     editor::HierarchyPanelState hierarchyState;
     editor::ScenePanelState scenePanelState;
     editor::InspectorState inspectorState;
@@ -119,7 +118,7 @@ namespace lve {
       SpriteAnimator *&animator,
       const glm::mat4 &view,
       const glm::mat4 &projection,
-      VkExtent2D viewportExtent,
+      backend::RenderExtent viewportExtent,
       editor::ResourceBrowserState &resourceBrowserState,
       void *sceneViewTextureId,
       void *gameViewTextureId);

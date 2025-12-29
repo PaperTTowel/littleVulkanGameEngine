@@ -158,12 +158,12 @@ namespace lve {
     vkCmdEndRenderPass(commandBuffer);
   }
 
-  bool RenderContext::wasSwapChainRecreated() {
-    if (swapChainRecreated) {
-      swapChainRecreated = false;
-      return true;
-    }
-    return false;
+  bool RenderContext::wasSwapChainRecreated() const {
+    return swapChainRecreated;
+  }
+
+  void RenderContext::clearSwapChainRecreated() {
+    swapChainRecreated = false;
   }
 
   VkRenderPass RenderContext::getSwapChainRenderPass() const {

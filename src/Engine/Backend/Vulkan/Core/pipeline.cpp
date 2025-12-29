@@ -1,6 +1,6 @@
 #include "pipeline.hpp"
 
-#include "Rendering/model.hpp"
+#include "Engine/Backend/Vulkan/Render/model.hpp"
 
 // std
 #include <cassert>
@@ -226,3 +226,5 @@ void LvePipeline::enableAlphaBlending(PipelineConfigInfo& configInfo){
 }
 
 } // namespace lve
+
+

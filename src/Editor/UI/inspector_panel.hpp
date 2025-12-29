@@ -2,9 +2,13 @@
 
 #include "utils/game_object.hpp"
 #include "utils/sprite_animator.hpp"
+#include "Engine/Backend/render_types.hpp"
 
-#include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
+
+namespace lve::backend {
+  class EditorRenderBackend;
+}
 
 namespace lve::editor {
 
@@ -24,8 +28,9 @@ namespace lve::editor {
   };
 
   struct TexturePreviewCache {
-    std::shared_ptr<LveTexture> texture{};
-    VkDescriptorSet descriptor{VK_NULL_HANDLE};
+    std::string path{};
+    backend::DescriptorSetHandle handle{nullptr};
+    backend::RenderExtent extent{};
   };
 
   struct InspectorState {
@@ -38,10 +43,10 @@ namespace lve::editor {
     std::vector<NodeTransformOverride> nodeOverrideEditStart{};
     bool gizmoWasUsing{false};
     bool gizmoWasEditingNode{false};
-    const LveModel *lastSelectedModel{nullptr};
+    const backend::RenderModel *lastSelectedModel{nullptr};
     LveGameObject::id_t lastMaterialOwnerId{0};
     std::string lastMaterialPath{};
-    const LveMaterial *lastMaterialPtr{nullptr};
+    const backend::RenderMaterial *lastMaterialPtr{nullptr};
     MaterialData materialDraft{};
     std::string materialDraftPath{};
     bool materialDirty{false};
@@ -93,9 +98,10 @@ namespace lve::editor {
     LveGameObject *selected,
     SpriteAnimator *animator,
     InspectorState &state,
+    backend::EditorRenderBackend &renderBackend,
     const glm::mat4 &view,
     const glm::mat4 &projection,
-    VkExtent2D viewportExtent,
+    backend::RenderExtent viewportExtent,
     bool *open,
     const GizmoContext &gizmoContext,
     int gizmoOperation,

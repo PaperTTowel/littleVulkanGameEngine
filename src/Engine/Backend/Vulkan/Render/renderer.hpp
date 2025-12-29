@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Engine/Backend/device.hpp"
-#include "Engine/Backend/window.hpp"
-#include "Engine/Backend/swap_chain.hpp"
+#include "Engine/Backend/Vulkan/Core/device.hpp"
+#include "Engine/Backend/Vulkan/Core/window.hpp"
+#include "Engine/Backend/Vulkan/Core/swap_chain.hpp"
 
 // std
 #include <cassert>
@@ -57,3 +57,4 @@ namespace lve{
         bool swapChainRecreated{false};
     };
 } // namespace lve
+

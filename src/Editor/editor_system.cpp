@@ -3,6 +3,7 @@
 #include "Editor/History/editor_snapshot.hpp"
 #include "Editor/Tools/editor_picking.hpp"
 #include "Editor/Workflow/editor_import.hpp"
+#include "Engine/material_io.hpp"
 #include "Engine/scene_system.hpp"
 
 #include <imgui.h>
@@ -21,23 +22,22 @@ namespace lve {
 
   namespace fs = std::filesystem;
 
-  EditorSystem::EditorSystem(LveWindow &window, LveDevice &device)
-    : imgui{window, device}, device{device} {
+  EditorSystem::EditorSystem(backend::EditorRenderBackend &renderBackend)
+    : renderBackend{renderBackend} {
     gizmoOperation = static_cast<int>(ImGuizmo::TRANSLATE);
     gizmoMode = static_cast<int>(ImGuizmo::LOCAL);
   }
 
-  void EditorSystem::init(VkRenderPass renderPass, uint32_t imageCount) {
-    imgui.init(renderPass, imageCount);
+  void EditorSystem::init(backend::RenderPassHandle renderPass, std::uint32_t imageCount) {
+    renderBackend.init(renderPass, imageCount);
   }
 
-  void EditorSystem::onRenderPassChanged(VkRenderPass renderPass, uint32_t imageCount) {
-    imgui.shutdown();
-    imgui.init(renderPass, imageCount);
+  void EditorSystem::onRenderPassChanged(backend::RenderPassHandle renderPass, std::uint32_t imageCount) {
+    renderBackend.onRenderPassChanged(renderPass, imageCount);
   }
 
   void EditorSystem::shutdown() {
-    imgui.shutdown();
+    renderBackend.shutdown();
   }
 
   EditorFrameResult EditorSystem::update(
@@ -53,7 +53,7 @@ namespace lve {
     SpriteAnimator *&animator,
     const glm::mat4 &view,
     const glm::mat4 &projection,
-    VkExtent2D viewportExtent,
+    backend::RenderExtent viewportExtent,
     editor::ResourceBrowserState &resourceBrowserState,
     void *sceneViewTextureId,
     void *gameViewTextureId) {
@@ -115,13 +115,13 @@ namespace lve {
     SpriteAnimator *&animator,
     const glm::mat4 &view,
     const glm::mat4 &projection,
-    VkExtent2D viewportExtent,
+    backend::RenderExtent viewportExtent,
     editor::ResourceBrowserState &resourceBrowserState,
     void *sceneViewTextureId,
     void *gameViewTextureId) {
 
-    imgui.newFrame();
-    imgui.buildUI(
+    renderBackend.newFrame();
+    renderBackend.buildUI(
       frameTime,
       cameraPos,
       cameraRot,
@@ -321,6 +321,7 @@ namespace lve {
         result.selectedObject,
         animator,
         inspectorState,
+        renderBackend,
         view,
         projection,
         viewportExtent,
@@ -683,7 +684,7 @@ namespace lve {
         result.selectedObject->model) {
       const std::string &path = result.inspectorActions.materialPath;
       std::string error;
-      if (!LveMaterial::saveToFile(path, result.inspectorActions.materialData, &error)) {
+      if (!saveMaterialToFile(path, result.inspectorActions.materialData, &error)) {
         std::cerr << "Failed to save material " << path;
         if (!error.empty()) {
           std::cerr << ": " << error;
@@ -981,7 +982,7 @@ namespace lve {
       sceneSystem.saveSceneToFile(getScenePanelState().path);
     }
     if (result.sceneActions.loadRequested) {
-      vkDeviceWaitIdle(device.device());
+      renderBackend.waitIdle();
       sceneSystem.loadSceneFromFile(getScenePanelState().path, viewerId);
       animator = sceneSystem.getSpriteAnimator();
       history.clear();
@@ -989,12 +990,12 @@ namespace lve {
     }
   }
 
-  void EditorSystem::render(VkCommandBuffer commandBuffer) {
-    imgui.render(commandBuffer);
+  void EditorSystem::render(backend::CommandBufferHandle commandBuffer) {
+    renderBackend.render(commandBuffer);
   }
 
   void EditorSystem::renderPlatformWindows() {
-    imgui.renderPlatformWindows();
+    renderBackend.renderPlatformWindows();
   }
 
 } // namespace lve

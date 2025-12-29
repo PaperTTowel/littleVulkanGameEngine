@@ -2,6 +2,7 @@
 
 // backend
 #include "camera.hpp"
+#include "Engine/Backend/Vulkan/runtime_backend.hpp"
 
 // utils
 #include "utils/keyboard_movement_controller.hpp"
@@ -20,7 +21,10 @@
 namespace lve {
 
   /* Engine bootstrap: initial objects */
-  EngineLoop::EngineLoop() {
+  EngineLoop::EngineLoop()
+    : runtime{std::make_unique<backend::VulkanRuntimeBackend>(WIDTH, HEIGHT, "Hello Vulkan!")}
+    , editorSystem{std::make_unique<EditorSystem>(runtime->editorBackend())} {
+    auto &sceneSystem = runtime->sceneSystem();
     sceneSystem.loadGameObjects();
     const auto &defaults = sceneSystem.getAssetDefaults();
     resourceBrowserState.browser.rootPath = defaults.rootPath;
@@ -36,16 +40,18 @@ namespace lve {
   /* Main loop: input -> update -> render -> UI */
   void EngineLoop::run() {
 
-    SpriteAnimator *spriteAnimator = sceneSystem.getSpriteAnimator();
+    auto &sceneSystem = runtime->sceneSystem();
+    auto &renderBackend = runtime->renderBackend();
+    auto &window = runtime->window();
+    auto &input = window.input();
 
-    std::cout << "Alignment: " << lveDevice.properties.limits.minUniformBufferOffsetAlignment << "\n";
-    std::cout << "atom size: " << lveDevice.properties.limits.nonCoherentAtomSize << "\n";
+    SpriteAnimator *spriteAnimator = sceneSystem.getSpriteAnimator();
 
     LveCamera editorCamera{};
     LveCamera gameCamera{};
-    editorSystem.init(
-      renderContext.getSwapChainRenderPass(),
-      static_cast<uint32_t>(renderContext.getSwapChainImageCount()));
+    editorSystem->init(
+      renderBackend.getSwapChainRenderPass(),
+      static_cast<uint32_t>(renderBackend.getSwapChainImageCount()));
 
     auto &viewerObject = sceneSystem.createEmptyObject();
     viewerObject.transform.translation.z = -2.5f;
@@ -57,7 +63,7 @@ namespace lve {
     ViewportInfo sceneViewInfo{};
     ViewportInfo gameViewInfo{};
     {
-      VkExtent2D initialExtent = lveWindow.getExtent();
+      const backend::RenderExtent initialExtent = window.getExtent();
       sceneViewInfo.width = initialExtent.width;
       sceneViewInfo.height = initialExtent.height;
       sceneViewInfo.visible = true;
@@ -67,8 +73,8 @@ namespace lve {
     auto currentTime = std::chrono::high_resolution_clock::now();
     std::vector<LveGameObject*> renderObjects{};
 
-    while (!lveWindow.shouldClose()) {
-      glfwPollEvents();
+    while (!window.shouldClose()) {
+      window.pollEvents();
 
       auto newTime = std::chrono::high_resolution_clock::now();
       float frameTime = std::chrono::duration<float, std::chrono::seconds::period>(newTime - currentTime).count();
@@ -76,7 +82,7 @@ namespace lve {
       
       // editor camera
       if (sceneViewInfo.hovered) {
-        cameraController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, viewerObject);
+        cameraController.moveInPlaneXZ(input, frameTime, viewerObject);
       }
       if (sceneViewInfo.hovered && sceneViewInfo.rightMouseDown) {
         const float mouseSensitivity = 0.003f;
@@ -96,7 +102,7 @@ namespace lve {
         continue;
       }
       auto &character = *characterPtr;
-      characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
+      characterController.moveInPlaneXZ(input, frameTime, character);
       character.transformDirty = true;
       if (spriteAnimator) {
         const char *stateName = (character.objState == ObjectState::WALKING) ? "walking" : "idle";
@@ -111,26 +117,27 @@ namespace lve {
       const glm::vec3 gameCamPos = character.transform.translation + gameCamOffset;
       gameCamera.setViewTarget(gameCamPos, character.transform.translation);
 
-      auto commandBuffer = renderContext.beginFrame();
-      if (renderContext.wasSwapChainRecreated()) {
-        editorSystem.onRenderPassChanged(
-          renderContext.getSwapChainRenderPass(),
-          static_cast<uint32_t>(renderContext.getSwapChainImageCount()));
+      auto commandBuffer = renderBackend.beginFrame();
+      if (renderBackend.wasSwapChainRecreated()) {
+        editorSystem->onRenderPassChanged(
+          renderBackend.getSwapChainRenderPass(),
+          static_cast<uint32_t>(renderBackend.getSwapChainImageCount()));
         sceneSystem.resetDescriptorCaches();
       }
       if (commandBuffer) {
-        renderContext.ensureOffscreenTargets(
+        renderBackend.ensureOffscreenTargets(
           sceneViewInfo.visible ? sceneViewInfo.width : 0,
           sceneViewInfo.visible ? sceneViewInfo.height : 0,
           gameViewInfo.visible ? gameViewInfo.width : 0,
           gameViewInfo.visible ? gameViewInfo.height : 0);
 
-        const uint32_t sceneWidth = sceneViewInfo.width > 0 ? sceneViewInfo.width : lveWindow.getExtent().width;
-        const uint32_t sceneHeight = sceneViewInfo.height > 0 ? sceneViewInfo.height : lveWindow.getExtent().height;
-        const float sceneAspect = sceneHeight > 0 ? (static_cast<float>(sceneWidth) / static_cast<float>(sceneHeight)) : lveRenderer.getAspectRatio();
+        const backend::RenderExtent windowExtent = window.getExtent();
+        const uint32_t sceneWidth = sceneViewInfo.width > 0 ? sceneViewInfo.width : windowExtent.width;
+        const uint32_t sceneHeight = sceneViewInfo.height > 0 ? sceneViewInfo.height : windowExtent.height;
+        const float sceneAspect = sceneHeight > 0 ? (static_cast<float>(sceneWidth) / static_cast<float>(sceneHeight)) : renderBackend.getAspectRatio();
         editorCamera.setPerspectiveProjection(glm::radians(50.f), sceneAspect, 0.1f, 100.f);
 
-        EditorFrameResult editorResult = editorSystem.update(
+        EditorFrameResult editorResult = editorSystem->update(
           frameTime,
           viewerObject.transform.translation,
           viewerObject.transform.rotation,
@@ -143,21 +150,21 @@ namespace lve {
           spriteAnimator,
           editorCamera.getView(),
           editorCamera.getProjection(),
-          VkExtent2D{sceneWidth, sceneHeight},
+          backend::RenderExtent{sceneWidth, sceneHeight},
           resourceBrowserState,
-          reinterpret_cast<void *>(renderContext.getSceneViewDescriptor()),
-          reinterpret_cast<void *>(renderContext.getGameViewDescriptor()));
+          renderBackend.getSceneViewDescriptor(),
+          renderBackend.getGameViewDescriptor());
 
         sceneViewInfo = editorResult.sceneView;
         gameViewInfo = editorResult.gameView;
 
         // rendering toggles pushed to shader systems
-        renderContext.simpleSystem().setWireframe(wireframeEnabled);
-        renderContext.simpleSystem().setNormalView(normalViewEnabled);
+        renderBackend.setWireframe(wireframeEnabled);
+        renderBackend.setNormalView(normalViewEnabled);
 
-        const uint32_t gameWidth = gameViewInfo.width > 0 ? gameViewInfo.width : lveWindow.getExtent().width;
-        const uint32_t gameHeight = gameViewInfo.height > 0 ? gameViewInfo.height : lveWindow.getExtent().height;
-        const float gameAspect = gameHeight > 0 ? (static_cast<float>(gameWidth) / static_cast<float>(gameHeight)) : lveRenderer.getAspectRatio();
+        const uint32_t gameWidth = gameViewInfo.width > 0 ? gameViewInfo.width : windowExtent.width;
+        const uint32_t gameHeight = gameViewInfo.height > 0 ? gameViewInfo.height : windowExtent.height;
+        const float gameAspect = gameHeight > 0 ? (static_cast<float>(gameWidth) / static_cast<float>(gameHeight)) : renderBackend.getAspectRatio();
         if (useOrthoCamera) {
           float orthoHeight = 10.f;
           float orthoWidth = orthoHeight * gameAspect;
@@ -172,63 +179,35 @@ namespace lve {
           gameCamera.setPerspectiveProjection(glm::radians(50.f), gameAspect, 0.1f, 100.f);
         }
 
-        const int frameIndex = lveRenderer.getFrameindex();
+        const int frameIndex = renderBackend.getFrameIndex();
         // final step of update is updating the game objects buffer data
         // The render functions MUST not change a game objects transform data
         sceneSystem.updateBuffers(frameIndex);
 
-        if (renderContext.beginSceneViewRenderPass(commandBuffer)) {
-          sceneSystem.collectObjects(renderObjects);
-          FrameInfo frameInfo = renderContext.makeFrameInfo(
-            frameTime,
-            editorCamera,
-            renderObjects,
-            commandBuffer);
+        sceneSystem.collectObjects(renderObjects);
+        renderBackend.renderSceneView(
+          frameTime,
+          editorCamera,
+          renderObjects,
+          commandBuffer);
 
-          GlobalUbo ubo{};
-          ubo.projection = editorCamera.getProjection();
-          ubo.view = editorCamera.getView();
-          ubo.inverseView = editorCamera.getInverseView();
-          renderContext.pointLightSystem().update(frameInfo, ubo);
-          renderContext.updateGlobalUbo(frameInfo.frameIndex, ubo);
+        sceneSystem.collectObjects(renderObjects);
+        renderBackend.renderGameView(
+          frameTime,
+          gameCamera,
+          renderObjects,
+          commandBuffer);
 
-          renderContext.simpleSystem().renderGameObjects(frameInfo);
-          renderContext.pointLightSystem().render(frameInfo);
-          renderContext.spriteSystem().renderSprites(frameInfo);
-          renderContext.endSceneViewRenderPass(commandBuffer);
-        }
-
-        if (renderContext.beginGameViewRenderPass(commandBuffer)) {
-          sceneSystem.collectObjects(renderObjects);
-          FrameInfo frameInfo = renderContext.makeFrameInfo(
-            frameTime,
-            gameCamera,
-            renderObjects,
-            commandBuffer);
-
-          GlobalUbo ubo{};
-          ubo.projection = gameCamera.getProjection();
-          ubo.view = gameCamera.getView();
-          ubo.inverseView = gameCamera.getInverseView();
-          renderContext.pointLightSystem().update(frameInfo, ubo);
-          renderContext.updateGlobalUbo(frameInfo.frameIndex, ubo);
-
-          renderContext.simpleSystem().renderGameObjects(frameInfo);
-          renderContext.pointLightSystem().render(frameInfo);
-          renderContext.spriteSystem().renderSprites(frameInfo);
-          renderContext.endGameViewRenderPass(commandBuffer);
-        }
-
-        renderContext.beginSwapChainRenderPass(commandBuffer);
-        editorSystem.render(commandBuffer);
-        renderContext.endSwapChainRenderPass(commandBuffer);
-        renderContext.endFrame();
-        editorSystem.renderPlatformWindows();
+        renderBackend.beginSwapChainRenderPass(commandBuffer);
+        editorSystem->render(commandBuffer);
+        renderBackend.endSwapChainRenderPass(commandBuffer);
+        renderBackend.endFrame();
+        editorSystem->renderPlatformWindows();
       }
     }
 
-    editorSystem.shutdown();
-    vkDeviceWaitIdle(lveDevice.device());
+    editorSystem->shutdown();
+    runtime->editorBackend().waitIdle();
   }
 
 } // namespace lve

@@ -1,16 +1,16 @@
-﻿#pragma once
+#pragma once
 
-#include "Backend/window.hpp"
-#include "Backend/device.hpp"
-#include "Rendering/renderer.hpp"
-#include "Rendering/render_context.hpp"
+#include "Engine/Backend/runtime_backend.hpp"
 #include "Editor/editor_system.hpp"
-#include "Engine/scene_system.hpp"
 
 // std
 #include <memory>
 
 namespace lve {
+  namespace backend {
+    class EditorRenderBackend;
+  }
+
   class EngineLoop {
   public:
     static constexpr int WIDTH = 800;
@@ -19,23 +19,21 @@ namespace lve {
     EngineLoop();
     ~EngineLoop();
 
-    EngineLoop(const LveWindow &) = delete;
-    EngineLoop &operator=(const LveWindow &) = delete;
+    EngineLoop(const EngineLoop &) = delete;
+    EngineLoop &operator=(const EngineLoop &) = delete;
 
     void run();
 
   private:
-    LveWindow lveWindow{WIDTH, HEIGHT, "Hello Vulkan!"};
-    LveDevice lveDevice{lveWindow};
-    LveRenderer lveRenderer{lveWindow, lveDevice};
-    RenderContext renderContext{lveDevice, lveRenderer};
-    LveGameObject::id_t viewerId;
+    std::unique_ptr<backend::RuntimeBackend> runtime;
+    std::unique_ptr<EditorSystem> editorSystem;
+    LveGameObject::id_t viewerId{0};
     bool useOrthoCamera{false};
     bool wireframeEnabled{false};
     bool normalViewEnabled{false};
-    EditorSystem editorSystem{lveWindow, lveDevice};
     editor::ResourceBrowserState resourceBrowserState{};
-    SceneSystem sceneSystem{lveDevice};
   };
 } // namespace lve
+
+
 

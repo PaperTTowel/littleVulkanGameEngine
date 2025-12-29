@@ -1,9 +1,8 @@
 #pragma once
 
-#include "Rendering/model.hpp"
-#include "Rendering/material.hpp"
-#include "Engine/Backend/swap_chain.hpp"
-#include "Rendering/texture.hpp"
+#include "Engine/Backend/object_buffer.hpp"
+#include "Engine/Backend/render_assets.hpp"
+#include "Engine/Backend/render_types.hpp"
 #include "utils/sprite_metadata.hpp"
 // #include "physics/physics_engine.hpp"
 
@@ -47,8 +46,8 @@ namespace lve {
   };
 
   struct SubMeshDescriptorCache {
-    std::array<VkDescriptorSet, LveSwapChain::MAX_FRAMES_IN_FLIGHT> sets{};
-    std::array<const LveTexture*, LveSwapChain::MAX_FRAMES_IN_FLIGHT> textures{};
+    std::array<backend::DescriptorSetHandle, backend::kMaxFramesInFlight> sets{};
+    std::array<const backend::RenderTexture*, backend::kMaxFramesInFlight> textures{};
   };
 
   class LveGameObjectManager; // forward declare game object manager class
@@ -79,8 +78,8 @@ namespace lve {
 
     bool hasPhysics = false;
     bool transformDirty{true};
-    std::array<VkDescriptorSet, LveSwapChain::MAX_FRAMES_IN_FLIGHT> descriptorSets{};
-    std::array<const LveTexture*, LveSwapChain::MAX_FRAMES_IN_FLIGHT> descriptorTextures{};
+    std::array<backend::DescriptorSetHandle, backend::kMaxFramesInFlight> descriptorSets{};
+    std::array<const backend::RenderTexture*, backend::kMaxFramesInFlight> descriptorTextures{};
     std::vector<NodeTransformOverride> nodeOverrides{};
     std::vector<SubMeshDescriptorCache> subMeshDescriptors{};
 
@@ -91,15 +90,15 @@ namespace lve {
 
     id_t getId() const { return id; }
 
-    VkDescriptorBufferInfo getBufferInfo(int frameIndex);
+    backend::BufferInfo getBufferInfo(int frameIndex);
 
     glm::vec3 color{};
     TransformComponent transform{};
 
     // Optional pointer components
-    std::shared_ptr<LveModel> model{};
-    std::shared_ptr<LveMaterial> material{};
-    std::shared_ptr<LveTexture> diffuseMap = nullptr;
+    std::shared_ptr<backend::RenderModel> model{};
+    std::shared_ptr<backend::RenderMaterial> material{};
+    std::shared_ptr<backend::RenderTexture> diffuseMap = nullptr;
     std::unique_ptr<PointLightComponent> pointLight = nullptr;
 
   private:
@@ -114,7 +113,9 @@ namespace lve {
   public:
     static constexpr int MAX_GAME_OBJECTS = 1000;
 
-    LveGameObjectManager(LveDevice &device);
+    LveGameObjectManager(
+      backend::ObjectBufferPoolPtr objectBuffers,
+      std::shared_ptr<backend::RenderTexture> defaultTexture);
     LveGameObjectManager(const LveGameObjectManager &) = delete;
     LveGameObjectManager &operator=(const LveGameObjectManager &) = delete;
     LveGameObjectManager(LveGameObjectManager &&) = delete;
@@ -148,23 +149,23 @@ namespace lve {
     void clearAll();
     void clearAllExcept(std::optional<LveGameObject::id_t> protectedId);
 
-    VkDescriptorBufferInfo getBufferInfoForGameObject(
-      int frameIndex, LveGameObject::id_t gameObjectId) const {
-      return uboBuffers[frameIndex]->descriptorInfoForIndex(gameObjectId);
-    }
+    backend::BufferInfo getBufferInfoForGameObject(
+      int frameIndex, LveGameObject::id_t gameObjectId) const;
 
     void updateFrame(LveGameObject &character, int maxFrames, float frameTime, float animationSpeed);
     void updateBuffer(int frameIndex);
     void resetDescriptorCaches();
 
     LveGameObject::Map gameObjects{};
-    std::vector<std::unique_ptr<LveBuffer>> uboBuffers{LveSwapChain::MAX_FRAMES_IN_FLIGHT};
+    backend::ObjectBufferPoolPtr objectBuffers;
 
     // std::unique_ptr<PhysicsEngine> physicsEngine;
 
   private:
     LveGameObject::id_t currentId = 0;
     std::vector<LveGameObject::id_t> freeIds;
-    std::shared_ptr<LveTexture> textureDefault;
+    std::shared_ptr<backend::RenderTexture> textureDefault;
   };
 } // namespace lve
+
+

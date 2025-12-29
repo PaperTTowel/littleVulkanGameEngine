@@ -1,8 +1,9 @@
 #include "inspector_panel.hpp"
 
+#include "Engine/Backend/editor_render_backend.hpp"
+
 #include <imgui.h>
 #include <ImGuizmo.h>
-#include <backends/imgui_impl_vulkan.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
@@ -10,9 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
-#include <deque>
 #include <filesystem>
-#include <memory>
 #include <string>
 #include <vector>
 #include <cstdio>
@@ -20,17 +19,6 @@
 namespace lve::editor {
 
   namespace {
-    void retirePreviewTexture(std::shared_ptr<LveTexture> texture) {
-      static std::deque<std::shared_ptr<LveTexture>> retired;
-      if (texture) {
-        retired.push_back(std::move(texture));
-      }
-      constexpr std::size_t kMaxRetired = 16;
-      while (retired.size() > kMaxRetired) {
-        retired.pop_front();
-      }
-    }
-
     const char *defaultStateName(ObjectState state) {
       return (state == ObjectState::WALKING) ? "walking" : "idle";
     }
@@ -92,29 +80,23 @@ namespace lve::editor {
     }
 
     ImTextureID getPreviewTextureId(
-      const std::shared_ptr<LveTexture> &texture,
+      const std::string &path,
+      backend::EditorRenderBackend &renderBackend,
       TexturePreviewCache &cache) {
-      if (!texture) {
-        cache.texture.reset();
-        cache.descriptor = VK_NULL_HANDLE;
+      if (path.empty()) {
+        cache.path.clear();
+        cache.handle = nullptr;
+        cache.extent = backend::RenderExtent{};
         return ImTextureID_Invalid;
       }
-      if (cache.texture != texture || cache.descriptor == VK_NULL_HANDLE) {
-        if (cache.texture && cache.texture != texture) {
-          retirePreviewTexture(cache.texture);
-        }
-        cache.texture = texture;
-        cache.descriptor = ImGui_ImplVulkan_AddTexture(
-          texture->sampler(),
-          texture->imageView(),
-          texture->getImageLayout());
+      if (cache.path != path || cache.handle == nullptr) {
+        cache.path = path;
+        cache.handle = renderBackend.getTexturePreview(path, cache.extent);
       }
-      return static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(cache.descriptor));
+      return cache.handle ? reinterpret_cast<ImTextureID>(cache.handle) : ImTextureID_Invalid;
     }
 
-    ImVec2 calcPreviewSize(const std::shared_ptr<LveTexture> &texture, float maxSize) {
-      if (!texture) return ImVec2{maxSize, maxSize};
-      const VkExtent3D extent = texture->getExtent();
+    ImVec2 calcPreviewSize(const backend::RenderExtent &extent, float maxSize) {
       if (extent.width == 0 || extent.height == 0) {
         return ImVec2{maxSize, maxSize};
       }
@@ -131,9 +113,10 @@ namespace lve::editor {
     LveGameObject *selected,
     SpriteAnimator *animator,
     InspectorState &state,
+    backend::EditorRenderBackend &renderBackend,
     const glm::mat4 &view,
     const glm::mat4 &projection,
-    VkExtent2D viewportExtent,
+    backend::RenderExtent viewportExtent,
     bool *open,
     const GizmoContext &gizmoContext,
     int gizmoOperation,
@@ -552,7 +535,6 @@ namespace lve::editor {
       auto editTexturePath = [&](const char *label,
                                  MaterialTextureSlot slot,
                                  std::string &value,
-                                 const std::shared_ptr<LveTexture> &previewTexture,
                                  TexturePreviewCache &cache) {
         bool changed = false;
         ImGui::PushID(label);
@@ -592,16 +574,13 @@ namespace lve::editor {
           state.materialDirty = true;
           changed = true;
         }
-        if (previewTexture) {
-          ImTextureID previewId = getPreviewTextureId(previewTexture, cache);
-          if (previewId) {
-            ImVec2 size = calcPreviewSize(previewTexture, previewSize);
-            ImGui::Spacing();
-            ImGui::Image(previewId, size);
-            const VkExtent3D extent = previewTexture->getExtent();
-            if (extent.width > 0 && extent.height > 0) {
-              ImGui::TextDisabled("%ux%u", extent.width, extent.height);
-            }
+        ImTextureID previewId = getPreviewTextureId(value, renderBackend, cache);
+        if (previewId) {
+          ImVec2 size = calcPreviewSize(cache.extent, previewSize);
+          ImGui::Spacing();
+          ImGui::Image(previewId, size);
+          if (cache.extent.width > 0 && cache.extent.height > 0) {
+            ImGui::TextDisabled("%ux%u", cache.extent.width, cache.extent.height);
           }
         } else {
           ImGui::Spacing();
@@ -617,30 +596,19 @@ namespace lve::editor {
         return changed;
       };
 
-      const std::shared_ptr<LveTexture> baseColorTex =
-        selected->material ? selected->material->getBaseColorTexture() : nullptr;
-      const std::shared_ptr<LveTexture> normalTex =
-        selected->material ? selected->material->getNormalTexture() : nullptr;
-      const std::shared_ptr<LveTexture> metallicTex =
-        selected->material ? selected->material->getMetallicRoughnessTexture() : nullptr;
-      const std::shared_ptr<LveTexture> occlusionTex =
-        selected->material ? selected->material->getOcclusionTexture() : nullptr;
-      const std::shared_ptr<LveTexture> emissiveTex =
-        selected->material ? selected->material->getEmissiveTexture() : nullptr;
-
-      if (editTexturePath("Base Color Tex", MaterialTextureSlot::BaseColor, state.materialDraft.textures.baseColor, baseColorTex, state.baseColorPreview)) {
+      if (editTexturePath("Base Color Tex", MaterialTextureSlot::BaseColor, state.materialDraft.textures.baseColor, state.baseColorPreview)) {
         materialChangedThisFrame = true;
       }
-      if (editTexturePath("Normal Tex", MaterialTextureSlot::Normal, state.materialDraft.textures.normal, normalTex, state.normalPreview)) {
+      if (editTexturePath("Normal Tex", MaterialTextureSlot::Normal, state.materialDraft.textures.normal, state.normalPreview)) {
         materialChangedThisFrame = true;
       }
-      if (editTexturePath("Metallic/Roughness Tex", MaterialTextureSlot::MetallicRoughness, state.materialDraft.textures.metallicRoughness, metallicTex, state.metallicPreview)) {
+      if (editTexturePath("Metallic/Roughness Tex", MaterialTextureSlot::MetallicRoughness, state.materialDraft.textures.metallicRoughness, state.metallicPreview)) {
         materialChangedThisFrame = true;
       }
-      if (editTexturePath("Occlusion Tex", MaterialTextureSlot::Occlusion, state.materialDraft.textures.occlusion, occlusionTex, state.occlusionPreview)) {
+      if (editTexturePath("Occlusion Tex", MaterialTextureSlot::Occlusion, state.materialDraft.textures.occlusion, state.occlusionPreview)) {
         materialChangedThisFrame = true;
       }
-      if (editTexturePath("Emissive Tex", MaterialTextureSlot::Emissive, state.materialDraft.textures.emissive, emissiveTex, state.emissivePreview)) {
+      if (editTexturePath("Emissive Tex", MaterialTextureSlot::Emissive, state.materialDraft.textures.emissive, state.emissivePreview)) {
         materialChangedThisFrame = true;
       }
 

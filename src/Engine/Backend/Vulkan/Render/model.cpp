@@ -1,7 +1,7 @@
-﻿#include "Rendering/model.hpp"
+#include "Engine/Backend/Vulkan/Render/model.hpp"
 
 #include "utils/utils.hpp"
-#include "Rendering/texture.hpp"
+#include "Engine/Backend/Vulkan/Render/texture.hpp"
 
 // libs
 #include <assimp/Importer.hpp>
@@ -343,7 +343,7 @@ namespace lve {
     }
   }
 
-  const LveTexture *LveModel::getDiffuseTextureForSubMesh(const SubMesh &subMesh) const {
+  const backend::RenderTexture *LveModel::getDiffuseTextureForSubMesh(const SubMesh &subMesh) const {
     if (subMesh.materialIndex < 0 ||
         static_cast<std::size_t>(subMesh.materialIndex) >= materialDiffuseTextures.size()) {
       return nullptr;
@@ -548,5 +548,7 @@ namespace lve {
   }
 
 }  // namespace lve
+
+
 
 

@@ -1,8 +1,5 @@
 #include "scene_system.hpp"
 
-// rendering
-#include "Rendering/model.hpp"
-
 // std
 #include <iostream>
 #include <vector>
@@ -21,9 +18,11 @@ namespace lve {
     }
   } // namespace
 
-  SceneSystem::SceneSystem(LveDevice &device)
-    : lveDevice{device},
-      gameObjectManager{device},
+  SceneSystem::SceneSystem(
+    backend::RenderAssetFactory &assets,
+    backend::ObjectBufferPoolPtr objectBuffers)
+    : assetFactory{assets},
+      gameObjectManager{std::move(objectBuffers), assets.getDefaultTexture()},
       assetDatabase{"Assets"} {}
 
   void SceneSystem::setAssetDefaults(const AssetDefaults &defaults) {
@@ -118,7 +117,7 @@ namespace lve {
     }
   }
 
-  std::shared_ptr<LveModel> SceneSystem::loadModelCached(const std::string &path) {
+  std::shared_ptr<backend::RenderModel> SceneSystem::loadModelCached(const std::string &path) {
     if (path.empty()) return {};
     const std::string assetPath = path;
     auto it = modelCache.find(assetPath);
@@ -126,8 +125,11 @@ namespace lve {
       return it->second;
     }
     const std::string resolvedPath = assetDatabase.resolveAssetPath(assetPath);
-    auto uniqueModel = LveModel::createModelFromFile(lveDevice, resolvedPath);
-    auto sharedModel = std::shared_ptr<LveModel>(std::move(uniqueModel));
+    auto sharedModel = assetFactory.loadModel(resolvedPath);
+    if (!sharedModel) {
+      std::cerr << "Failed to load model " << resolvedPath << "\n";
+      return {};
+    }
     modelCache[assetPath] = sharedModel;
     if (assetPath == "Assets/models/colored_cube.obj") {
       cubeModel = sharedModel;
@@ -135,15 +137,14 @@ namespace lve {
     return sharedModel;
   }
 
-  std::shared_ptr<LveMaterial> SceneSystem::loadMaterialCached(const std::string &path) {
+  std::shared_ptr<backend::RenderMaterial> SceneSystem::loadMaterialCached(const std::string &path) {
     if (path.empty()) return {};
     auto it = materialCache.find(path);
     if (it != materialCache.end()) {
       return it->second;
     }
     std::string error;
-    auto material = LveMaterial::loadFromFile(
-      lveDevice,
+    auto material = assetFactory.loadMaterial(
       path,
       &error,
       [this](const std::string &assetPath) {
@@ -164,12 +165,14 @@ namespace lve {
   bool SceneSystem::updateMaterialFromData(const std::string &path, const MaterialData &data) {
     if (path.empty()) return false;
     auto it = materialCache.find(path);
-    std::shared_ptr<LveMaterial> target;
+    std::shared_ptr<backend::RenderMaterial> target;
     if (it != materialCache.end()) {
       target = it->second;
     } else {
-      target = std::make_shared<LveMaterial>();
-      materialCache[path] = target;
+      target = assetFactory.createMaterial();
+      if (target) {
+        materialCache[path] = target;
+      }
     }
 
     if (!target) {
@@ -179,7 +182,6 @@ namespace lve {
     target->setPath(path);
     std::string error;
     const bool ok = target->applyData(
-      lveDevice,
       data,
       &error,
       [this](const std::string &assetPath) {
@@ -256,7 +258,7 @@ namespace lve {
     }
     playerMeta = meta;
     assetDefaults.activeSpriteMetaPath = assetPath;
-    spriteAnimator = std::make_unique<SpriteAnimator>(lveDevice, playerMeta);
+    spriteAnimator = std::make_unique<SpriteAnimator>(assetFactory, playerMeta);
 
     for (auto &kv : gameObjectManager.gameObjects) {
       auto &obj = kv.second;
@@ -293,7 +295,7 @@ namespace lve {
 
   LveGameObject &SceneSystem::createSpriteObject(const glm::vec3 &position, ObjectState state, const std::string &metaPath) {
     if (!spriteModel) {
-      spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");
+      spriteModel = loadModelCached("Assets/models/quad.obj");
     }
     auto &obj = gameObjectManager.createGameObject();
     obj.model = spriteModel;
@@ -349,7 +351,7 @@ namespace lve {
     ObjectState state,
     const std::string &metaPath) {
     if (!spriteModel) {
-      spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");
+      spriteModel = loadModelCached("Assets/models/quad.obj");
     }
     auto &obj = gameObjectManager.createGameObjectWithId(id);
     obj.model = spriteModel;
@@ -485,7 +487,7 @@ namespace lve {
     if (!setActiveSpriteMetadata(metaPath)) {
       std::cerr << "Falling back to previous sprite metadata\n";
       if (!spriteAnimator) {
-        spriteAnimator = std::make_unique<SpriteAnimator>(lveDevice, playerMeta);
+        spriteAnimator = std::make_unique<SpriteAnimator>(assetFactory, playerMeta);
       }
     }
 
@@ -581,7 +583,7 @@ namespace lve {
     assetDatabase.initialize();
 
     cubeModel = loadModelCached(assetDefaults.activeMeshPath);
-    spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");
+    spriteModel = loadModelCached("Assets/models/quad.obj");
 
     createMeshObject({-.5f, .5f, 0.f}, assetDefaults.activeMeshPath);
 
@@ -598,7 +600,7 @@ namespace lve {
       playerMeta.states["idle"] = idle;
       playerMeta.states["walking"] = walk;
     }
-    spriteAnimator = std::make_unique<SpriteAnimator>(lveDevice, playerMeta);
+    spriteAnimator = std::make_unique<SpriteAnimator>(assetFactory, playerMeta);
 
     auto &characterObj = createSpriteObject({0.f, 0.f, 0.f}, ObjectState::IDLE, assetDefaults.activeSpriteMetaPath);
     characterId = characterObj.getId();
@@ -622,3 +624,5 @@ namespace lve {
     }
   }
 } // namespace lve
+
+

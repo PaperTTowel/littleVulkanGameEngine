@@ -1,6 +1,5 @@
-#include "Rendering/material.hpp"
+#include "Engine/material_io.hpp"
 
-#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <regex>
@@ -9,7 +8,6 @@
 namespace lve {
 
   namespace {
-
     std::string readFileToString(const std::string &path) {
       std::ifstream file(path, std::ios::in | std::ios::binary);
       if (!file) return {};
@@ -84,33 +82,6 @@ namespace lve {
       return out;
     }
 
-    std::shared_ptr<LveTexture> loadTexture(
-      LveDevice &device,
-      const std::string &path,
-      std::string *outError) {
-      if (path.empty()) return {};
-      try {
-        auto tex = LveTexture::createTextureFromFile(device, path);
-        return std::shared_ptr<LveTexture>(std::move(tex));
-      } catch (const std::exception &e) {
-        if (outError) {
-          *outError = e.what();
-        }
-      }
-      return {};
-    }
-
-    void retireTexture(std::shared_ptr<LveTexture> texture) {
-      static std::deque<std::shared_ptr<LveTexture>> retiredTextures;
-      if (texture) {
-        retiredTextures.push_back(std::move(texture));
-      }
-      constexpr std::size_t kMaxRetired = 16;
-      while (retiredTextures.size() > kMaxRetired) {
-        retiredTextures.pop_front();
-      }
-    }
-
     MaterialData parseMaterialData(const std::string &content, const MaterialData &base) {
       MaterialData data = base;
       data.version = parseInt(content, "version", data.version);
@@ -128,10 +99,9 @@ namespace lve {
       data.factors.normalScale = parseFloat(content, "normalScale", data.factors.normalScale);
       return data;
     }
-
   } // namespace
 
-  bool LveMaterial::saveToFile(
+  bool saveMaterialToFile(
     const std::string &path,
     const MaterialData &data,
     std::string *outError) {
@@ -186,9 +156,9 @@ namespace lve {
     return true;
   }
 
-  std::shared_ptr<LveMaterial> LveMaterial::loadFromFile(
-    LveDevice &device,
+  bool loadMaterialDataFromFile(
     const std::string &path,
+    MaterialData &outData,
     std::string *outError,
     const std::function<std::string(const std::string &)> &pathResolver) {
     const std::string resolvedPath = pathResolver ? pathResolver(path) : path;
@@ -197,69 +167,11 @@ namespace lve {
       if (outError) {
         *outError = "Failed to read material file";
       }
-      return {};
+      return false;
     }
 
-    auto material = std::make_shared<LveMaterial>();
-    material->path = path;
-    const MaterialData parsed = parseMaterialData(content, material->data);
-    material->applyData(device, parsed, outError, pathResolver);
-
-    return material;
-  }
-
-  bool LveMaterial::applyData(
-    LveDevice &device,
-    const MaterialData &newData,
-    std::string *outError,
-    const std::function<std::string(const std::string &)> &pathResolver) {
-    const MaterialData previous = data;
-    data = newData;
-    bool ok = true;
-    std::string firstError{};
-
-    auto resolveTexturePath = [&](const std::string &texPath) {
-      if (texPath.empty()) return texPath;
-      if (pathResolver) {
-        const std::string resolved = pathResolver(texPath);
-        return resolved.empty() ? texPath : resolved;
-      }
-      return texPath;
-    };
-
-    auto updateTexture = [&](const std::string &newPath,
-                             const std::string &oldPath,
-                             std::shared_ptr<LveTexture> &target) {
-      if (newPath == oldPath) {
-        return;
-      }
-      std::shared_ptr<LveTexture> oldTexture = target;
-      target.reset();
-      if (!newPath.empty()) {
-        std::string localError;
-        target = loadTexture(device, resolveTexturePath(newPath), &localError);
-        if (!target && !localError.empty()) {
-          ok = false;
-          if (firstError.empty()) {
-            firstError = localError;
-          }
-        }
-      }
-      if (oldTexture && oldTexture != target) {
-        retireTexture(std::move(oldTexture));
-      }
-    };
-
-    updateTexture(data.textures.baseColor, previous.textures.baseColor, baseColorTexture);
-    updateTexture(data.textures.normal, previous.textures.normal, normalTexture);
-    updateTexture(data.textures.metallicRoughness, previous.textures.metallicRoughness, metallicRoughnessTexture);
-    updateTexture(data.textures.occlusion, previous.textures.occlusion, occlusionTexture);
-    updateTexture(data.textures.emissive, previous.textures.emissive, emissiveTexture);
-
-    if (!firstError.empty() && outError) {
-      *outError = firstError;
-    }
-    return ok;
+    outData = parseMaterialData(content, outData);
+    return true;
   }
 
 } // namespace lve

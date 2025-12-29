@@ -7,7 +7,10 @@
 
 namespace lve {
   class SceneSystem;
-  class LveModel;
+}
+
+namespace lve::backend {
+  class RenderModel;
 }
 
 namespace lve::editor::workflow {
@@ -27,7 +30,7 @@ namespace lve::editor::workflow {
   bool CreateMaterialInstance(
     SceneSystem &sceneSystem,
     const std::string &sourcePath,
-    const LveModel *model,
+    const backend::RenderModel *model,
     LveGameObject::id_t objectId,
     const std::string &root,
     std::string &outPath,

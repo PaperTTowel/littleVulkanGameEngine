@@ -1,5 +1,8 @@
 #include "sprite_render_system.hpp"
 
+#include "Engine/Backend/Vulkan/Render/model.hpp"
+#include "Engine/Backend/Vulkan/Render/texture.hpp"
+
 // libs
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -114,15 +117,25 @@ namespace lve {
       auto &obj = *objPtr;
       if (!obj.isSprite) continue;
       if (obj.model == nullptr) continue;
+      auto *model = static_cast<LveModel*>(obj.model.get());
+      if (!model) continue;
 
       const int frameIndex = frameInfo.frameIndex;
-      VkDescriptorSet &descriptorSet = obj.descriptorSets[frameIndex];
-      const LveTexture *currentTexture = obj.diffuseMap.get();
+      auto &descriptorHandle = obj.descriptorSets[frameIndex];
+      VkDescriptorSet descriptorSet = reinterpret_cast<VkDescriptorSet>(descriptorHandle);
+      const LveTexture *currentTexture = static_cast<const LveTexture*>(obj.diffuseMap.get());
+      if (!currentTexture) {
+        continue;
+      }
       if (descriptorSet == VK_NULL_HANDLE || obj.descriptorTextures[frameIndex] != currentTexture) {
         auto bufferInfo = obj.getBufferInfo(frameIndex);
-        auto imageInfo = obj.diffuseMap->getImageInfo();
+        VkDescriptorBufferInfo vkBufferInfo{};
+        vkBufferInfo.buffer = reinterpret_cast<VkBuffer>(bufferInfo.buffer);
+        vkBufferInfo.offset = bufferInfo.offset;
+        vkBufferInfo.range = bufferInfo.range;
+        auto imageInfo = currentTexture->getImageInfo();
         LveDescriptorWriter writer(*renderSystemLayout, frameInfo.frameDescriptorPool);
-        writer.writeBuffer(0, &bufferInfo)
+        writer.writeBuffer(0, &vkBufferInfo)
           .writeImage(1, &imageInfo);
         if (descriptorSet == VK_NULL_HANDLE) {
           if (!writer.build(descriptorSet)) {
@@ -131,6 +144,7 @@ namespace lve {
         } else {
           writer.overwrite(descriptorSet);
         }
+        descriptorHandle = reinterpret_cast<backend::DescriptorSetHandle>(descriptorSet);
         obj.descriptorTextures[frameIndex] = currentTexture;
       }
 
@@ -192,8 +206,8 @@ namespace lve {
         sizeof(SpritePushConstantData),
         &push);
 
-      obj.model->bind(frameInfo.commandBuffer);
-      obj.model->draw(frameInfo.commandBuffer);
+      model->bind(frameInfo.commandBuffer);
+      model->draw(frameInfo.commandBuffer);
     }
   }
 } // namespace lve

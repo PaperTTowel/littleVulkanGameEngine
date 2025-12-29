@@ -1,6 +1,7 @@
 #pragma once
 
-#include "Engine/Backend/device.hpp"
+#include "Engine/Backend/render_assets.hpp"
+#include "Engine/Backend/Vulkan/Core/device.hpp"
 
 // libs
 #include <vulkan/vulkan.h>
@@ -11,7 +12,7 @@
 #include <string>
 
 namespace lve {
-class LveTexture {
+class LveTexture : public backend::RenderTexture {
  public:
   LveTexture(LveDevice &device, const std::string &textureFilepath);
   LveTexture(LveDevice &device, const unsigned char *rgbaPixels, int width, int height);
@@ -68,3 +69,4 @@ class LveTexture {
 };
 
 }  // namespace lve
+

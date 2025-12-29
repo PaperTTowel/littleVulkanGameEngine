@@ -2,9 +2,9 @@
 
 #include "Engine/camera.hpp"
 #include "utils/game_object.hpp"
-#include "Engine/Backend/pipeline.hpp"
-#include "Rendering/frame_info.hpp"
-#include "Engine/Backend/device.hpp"
+#include "Engine/Backend/Vulkan/Core/pipeline.hpp"
+#include "Engine/Backend/Vulkan/Render/frame_info.hpp"
+#include "Engine/Backend/Vulkan/Core/device.hpp"
 
 // std
 #include <memory>
@@ -35,3 +35,5 @@ namespace lve {
     BillboardMode billboardMode{BillboardMode::None};
   };
 } // namespace lve
+
+

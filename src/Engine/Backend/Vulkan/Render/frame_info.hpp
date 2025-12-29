@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/camera.hpp"
-#include "Engine/Backend/descriptors.hpp"
+#include "Engine/Backend/Vulkan/Core/descriptors.hpp"
 #include "utils/game_object.hpp"
 
 // lib
@@ -36,3 +36,4 @@ namespace lve{
         std::vector<LveGameObject*> &gameObjects;
     };
 } // namespace lve
+

@@ -22,7 +22,7 @@ namespace lve::editor {
       return displayName + " (" + type + ") [ID " + std::to_string(obj.getId()) + "]";
     }
 
-    std::string makeNodeLabel(const LveModel::Node &node, std::size_t index) {
+    std::string makeNodeLabel(const backend::ModelNode &node, std::size_t index) {
       std::string label = node.name.empty()
         ? ("Node " + std::to_string(index))
         : node.name;
@@ -31,7 +31,7 @@ namespace lve::editor {
     }
 
     void drawNodeTree(
-      const std::vector<LveModel::Node> &nodes,
+      const std::vector<backend::ModelNode> &nodes,
       std::size_t nodeIndex,
       HierarchyPanelState &state,
       LveGameObject::id_t objectId) {

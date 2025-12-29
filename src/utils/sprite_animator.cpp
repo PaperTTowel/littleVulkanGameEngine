@@ -25,16 +25,18 @@ namespace lve {
     }
   } // namespace
 
-  SpriteAnimator::SpriteAnimator(LveDevice &device, SpriteMetadata meta)
-    : device{device}, metadata{std::move(meta)} {}
+  SpriteAnimator::SpriteAnimator(backend::RenderAssetFactory &assets, SpriteMetadata meta)
+    : assets{assets}, metadata{std::move(meta)} {}
 
-  std::shared_ptr<LveTexture> SpriteAnimator::loadTextureCached(const std::string &path) {
+  std::shared_ptr<backend::RenderTexture> SpriteAnimator::loadTextureCached(const std::string &path) {
     auto it = textureCache.find(path);
     if (it != textureCache.end()) {
       return it->second;
     }
-    auto uniqueTex = LveTexture::createTextureFromFile(device, path);
-    auto sharedTex = std::shared_ptr<LveTexture>(std::move(uniqueTex));
+    auto sharedTex = assets.loadTexture(path);
+    if (!sharedTex) {
+      return nullptr;
+    }
     textureCache[path] = sharedTex;
     return sharedTex;
   }
@@ -59,11 +61,9 @@ namespace lve {
       return false;
     }
 
-    std::shared_ptr<LveTexture> texture;
-    try {
-      texture = loadTextureCached(texturePath);
-    } catch (const std::exception &e) {
-      std::cerr << "Failed to load sprite texture: " << texturePath << " - " << e.what() << "\n";
+    std::shared_ptr<backend::RenderTexture> texture = loadTextureCached(texturePath);
+    if (!texture) {
+      std::cerr << "Failed to load sprite texture: " << texturePath << "\n";
       return false;
     }
 

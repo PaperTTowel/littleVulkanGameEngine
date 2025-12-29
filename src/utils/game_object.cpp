@@ -1,7 +1,6 @@
 #include "utils/game_object.hpp"
 
 #include <algorithm>
-#include <numeric>
 #include <stdexcept>
 
 namespace lve {
@@ -107,24 +106,11 @@ namespace lve {
     return gameObj;
   }
 
-  LveGameObjectManager::LveGameObjectManager(LveDevice &device) {/* : physicsEngine{std::make_unique<PhysicsEngine>()} */ // physicsEngine initialization temporarily disabled {
-    // including nonCoherentAtomSize allows us to flush a specific index at once
-    int alignment = std::lcm(
-      device.properties.limits.nonCoherentAtomSize,
-      device.properties.limits.minUniformBufferOffsetAlignment);
-    for (int i = 0; i < uboBuffers.size(); i++) {
-      uboBuffers[i] = std::make_unique<LveBuffer>(
-      device,
-      sizeof(GameObjectBufferData),
-      LveGameObjectManager::MAX_GAME_OBJECTS,
-      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-      alignment);
-      uboBuffers[i]->map();
-    }
-
-    textureDefault = LveTexture::createTextureFromFile(device, "Assets/textures/missing.png");
-  }
+  LveGameObjectManager::LveGameObjectManager(
+    backend::ObjectBufferPoolPtr buffers,
+    std::shared_ptr<backend::RenderTexture> defaultTexture)
+    : objectBuffers{std::move(buffers)}
+    , textureDefault{std::move(defaultTexture)} {}
 
   bool LveGameObjectManager::destroyGameObject(LveGameObject::id_t id) {
     auto it = gameObjects.find(id);
@@ -189,32 +175,39 @@ namespace lve {
       GameObjectBufferData data{};
       data.modelMatrix = obj.transform.mat4();
       data.normalMatrix = obj.transform.normalMatrix();
-      for (auto &buffer : uboBuffers) {
-        buffer->writeToIndex(&data, kv.first);
-      }
-      obj.transformDirty = false;
-      anyDirty = true;
+    if (objectBuffers) {
+      objectBuffers->writeToIndex(&data, kv.first);
     }
-    if (anyDirty) {
-      for (auto &buffer : uboBuffers) {
-        buffer->flush();
-      }
+    obj.transformDirty = false;
+    anyDirty = true;
+  }
+    if (anyDirty && objectBuffers) {
+      objectBuffers->flush();
     }
+  }
+
+  backend::BufferInfo LveGameObjectManager::getBufferInfoForGameObject(
+    int frameIndex,
+    LveGameObject::id_t gameObjectId) const {
+    if (!objectBuffers) {
+      return {};
+    }
+    return objectBuffers->getBufferInfo(frameIndex, gameObjectId);
   }
 
   void LveGameObjectManager::resetDescriptorCaches() {
     for (auto &kv : gameObjects) {
       auto &obj = kv.second;
-      obj.descriptorSets.fill(VK_NULL_HANDLE);
+      obj.descriptorSets.fill(nullptr);
       obj.descriptorTextures.fill(nullptr);
       for (auto &cache : obj.subMeshDescriptors) {
-        cache.sets.fill(VK_NULL_HANDLE);
+        cache.sets.fill(nullptr);
         cache.textures.fill(nullptr);
       }
     }
   }
 
-  VkDescriptorBufferInfo LveGameObject::getBufferInfo(int frameIndex) {
+  backend::BufferInfo LveGameObject::getBufferInfo(int frameIndex) {
     return gameObjectManager.getBufferInfoForGameObject(frameIndex, id);
   }
 

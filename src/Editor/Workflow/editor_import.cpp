@@ -1,8 +1,7 @@
 #include "Editor/Workflow/editor_import.hpp"
 
+#include "Engine/material_io.hpp"
 #include "Engine/scene_system.hpp"
-#include "Rendering/material.hpp"
-#include "Rendering/model.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -142,7 +141,7 @@ namespace lve::editor::workflow {
   bool CreateMaterialInstance(
     SceneSystem &sceneSystem,
     const std::string &sourcePath,
-    const LveModel *model,
+    const backend::RenderModel *model,
     LveGameObject::id_t objectId,
     const std::string &root,
     std::string &outPath,
@@ -184,7 +183,7 @@ namespace lve::editor::workflow {
     fs::path targetDir = rootPath / "materials";
     fs::path targetPath = MakeUniquePath(targetDir / (data.name + ".mat"));
     std::string error;
-    if (!LveMaterial::saveToFile(targetPath.generic_string(), data, &error)) {
+    if (!saveMaterialToFile(targetPath.generic_string(), data, &error)) {
       outError = error.empty() ? "Failed to save material instance" : error;
       return false;
     }
@@ -221,3 +220,5 @@ namespace lve::editor::workflow {
   }
 
 } // namespace lve::editor::workflow
+
+

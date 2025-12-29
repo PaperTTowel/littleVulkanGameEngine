@@ -1,26 +1,26 @@
 #pragma once
 
 #include "game_object.hpp"
-#include "Engine/Backend/window.hpp"
+#include "Engine/Backend/input.hpp"
 
 namespace lve {
   class KeyboardMovementController {
 
   public:
     struct KeyMappings {
-      int moveLeft = GLFW_KEY_H;
-      int moveRight = GLFW_KEY_K;
-      int moveForward = GLFW_KEY_U;
-      int moveBackward = GLFW_KEY_J;
-      int moveUp = GLFW_KEY_I;
-      int moveDown = GLFW_KEY_Y;
-      int lookLeft = GLFW_KEY_LEFT;
-      int lookRight = GLFW_KEY_RIGHT;
-      int lookUp = GLFW_KEY_UP;
-      int lookDown = GLFW_KEY_DOWN;
+      backend::KeyCode moveLeft = backend::KeyCode::H;
+      backend::KeyCode moveRight = backend::KeyCode::K;
+      backend::KeyCode moveForward = backend::KeyCode::U;
+      backend::KeyCode moveBackward = backend::KeyCode::J;
+      backend::KeyCode moveUp = backend::KeyCode::I;
+      backend::KeyCode moveDown = backend::KeyCode::Y;
+      backend::KeyCode lookLeft = backend::KeyCode::Left;
+      backend::KeyCode lookRight = backend::KeyCode::Right;
+      backend::KeyCode lookUp = backend::KeyCode::Up;
+      backend::KeyCode lookDown = backend::KeyCode::Down;
     };
 
-    void moveInPlaneXZ(GLFWwindow *window, float dt, LveGameObject &gameObject);
+    void moveInPlaneXZ(backend::InputProvider &input, float dt, LveGameObject &gameObject);
 
     KeyMappings keys{};
     float moveSpeed{3.f};
@@ -30,13 +30,13 @@ namespace lve {
   class CharacterMovementController {
   public:
     struct KeyMappings {
-      int moveLeft = GLFW_KEY_A;
-      int moveRight = GLFW_KEY_D;
-      int moveForward = GLFW_KEY_W;
-      int moveBackward = GLFW_KEY_S;
+      backend::KeyCode moveLeft = backend::KeyCode::A;
+      backend::KeyCode moveRight = backend::KeyCode::D;
+      backend::KeyCode moveForward = backend::KeyCode::W;
+      backend::KeyCode moveBackward = backend::KeyCode::S;
     };
 
-    void moveInPlaneXZ(GLFWwindow *window, float dt, LveGameObject &gameObject);
+    void moveInPlaneXZ(backend::InputProvider &input, float dt, LveGameObject &gameObject);
 
     KeyMappings keys{};
     float moveSpeed{2.f};

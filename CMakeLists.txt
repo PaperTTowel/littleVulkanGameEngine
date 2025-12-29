@@ -26,7 +26,15 @@ set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
 add_subdirectory(external/assimp)
 
-file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.hpp")
+file(GLOB_RECURSE SOURCES
+    "src/*.cpp" "src/*.hpp"
+    "src/Editor/*.cpp" "src/Editor/*.hpp"
+    "src/Engine/*.cpp" "src/Engine/*.hpp"
+    "src/ImGui/*.cpp" "src/ImGui/*.hpp"
+    "src/utils/*.cpp" "src/utils/*.hpp"
+)
+list(FILTER SOURCES EXCLUDE REGEX ".*/src/Engine/Backend/[^/]+\\.(cpp|hpp)$")
+list(FILTER SOURCES EXCLUDE REGEX ".*/src/Rendering/.*\\.(cpp|hpp)$")
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${IMGUI_SOURCES} ${IMGUIZMO_SOURCES})
 
@@ -61,8 +69,8 @@ find_program(GLSL_VALIDATOR glslangValidator HINTS
 )
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
-    "${PROJECT_SOURCE_DIR}/src/Shaders/*.frag"
-    "${PROJECT_SOURCE_DIR}/src/Shaders/*.vert"
+    "${PROJECT_SOURCE_DIR}/src/Engine/Backend/Vulkan/Shaders/*.frag"
+    "${PROJECT_SOURCE_DIR}/src/Engine/Backend/Vulkan/Shaders/*.vert"
 )
 
 set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/Shaders")
