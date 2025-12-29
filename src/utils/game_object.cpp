@@ -222,22 +222,21 @@ namespace lve {
     : id{objId}, gameObjectManager{manager} {}
 
   // 오브젝트 프레임 업데이트
-  void LveGameObjectManager::updateFrame(LveGameObject &character, int /*maxFrames*/, float frameTime, float /*animationSpeed*/) {
-    // prefer per-object sprite state metadata
-    const int stateKey = static_cast<int>(character.objState);
-    auto it = character.spriteStates.find(stateKey);
-    if (it == character.spriteStates.end()) {
-      return;
-    }
-
-    const SpriteStateInfo &stateInfo = it->second;
-    if (stateInfo.frameCount <= 0) {
+  void LveGameObjectManager::updateFrame(
+    LveGameObject &character,
+    int maxFrames,
+    float frameTime,
+    float animationSpeed) {
+    const SpriteStateInfo *stateInfo = character.hasSpriteState ? &character.spriteState : nullptr;
+    const int frameCount = stateInfo ? stateInfo->frameCount : maxFrames;
+    const float frameDuration = stateInfo ? stateInfo->frameDuration : animationSpeed;
+    if (frameCount <= 0 || frameDuration <= 0.f) {
       return;
     }
 
     character.animationTimeAccumulator += frameTime;
-    if (character.animationTimeAccumulator >= stateInfo.frameDuration) {
-      character.currentFrame = (character.currentFrame + 1) % stateInfo.frameCount;
+    if (character.animationTimeAccumulator >= frameDuration) {
+      character.currentFrame = (character.currentFrame + 1) % frameCount;
       character.animationTimeAccumulator = 0.0f;
     }
   }

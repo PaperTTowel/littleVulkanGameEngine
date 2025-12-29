@@ -15,12 +15,20 @@
 // std
 #include <chrono>
 #include <iostream>
+#include <vector>
 
 namespace lve {
 
   /* Engine bootstrap: initial objects */
   EngineLoop::EngineLoop() {
     sceneSystem.loadGameObjects();
+    const auto &defaults = sceneSystem.getAssetDefaults();
+    resourceBrowserState.browser.rootPath = defaults.rootPath;
+    resourceBrowserState.browser.currentPath = defaults.rootPath;
+    resourceBrowserState.browser.pendingRefresh = true;
+    resourceBrowserState.activeMeshPath = defaults.activeMeshPath;
+    resourceBrowserState.activeSpriteMetaPath = defaults.activeSpriteMetaPath;
+    resourceBrowserState.activeMaterialPath = defaults.activeMaterialPath;
   }
 
   EngineLoop::~EngineLoop() {}
@@ -28,8 +36,6 @@ namespace lve {
   /* Main loop: input -> update -> render -> UI */
   void EngineLoop::run() {
 
-    auto &gameObjectManager = sceneSystem.getGameObjectManager();
-    auto &resourceBrowserState = sceneSystem.getResourceBrowserState();
     SpriteAnimator *spriteAnimator = sceneSystem.getSpriteAnimator();
 
     std::cout << "Alignment: " << lveDevice.properties.limits.minUniformBufferOffsetAlignment << "\n";
@@ -41,7 +47,7 @@ namespace lve {
       renderContext.getSwapChainRenderPass(),
       static_cast<uint32_t>(renderContext.getSwapChainImageCount()));
 
-    auto &viewerObject = gameObjectManager.createGameObject();
+    auto &viewerObject = sceneSystem.createEmptyObject();
     viewerObject.transform.translation.z = -2.5f;
     viewerId = viewerObject.getId();
 
@@ -59,6 +65,7 @@ namespace lve {
     }
 
     auto currentTime = std::chrono::high_resolution_clock::now();
+    std::vector<LveGameObject*> renderObjects{};
 
     while (!lveWindow.shouldClose()) {
       glfwPollEvents();
@@ -83,28 +90,21 @@ namespace lve {
 
       // character update (2D sprite)
       const auto characterId = sceneSystem.getCharacterId();
-      auto characterIt = gameObjectManager.gameObjects.find(characterId);
-      if (characterIt == gameObjectManager.gameObjects.end()) {
+      auto *characterPtr = sceneSystem.findObject(characterId);
+      if (!characterPtr) {
         std::cerr << "Character object missing; cannot update\n";
         continue;
       }
-      auto &character = characterIt->second;
+      auto &character = *characterPtr;
       characterController.moveInPlaneXZ(lveWindow.getGLFWwindow(), frameTime, character);
       character.transformDirty = true;
       if (spriteAnimator) {
         const char *stateName = (character.objState == ObjectState::WALKING) ? "walking" : "idle";
         if (character.spriteStateName != stateName || !character.diffuseMap) {
-          spriteAnimator->applySpriteState(character, character.objState);
+          spriteAnimator->applySpriteState(character, stateName);
         }
       }
-      const SpriteStateInfo* stateInfoPtr = nullptr;
-      auto stateIt = character.spriteStates.find(static_cast<int>(character.objState));
-      if (stateIt != character.spriteStates.end()) {
-        stateInfoPtr = &stateIt->second;
-      }
-      int frameCount = stateInfoPtr ? stateInfoPtr->frameCount : 6;
-      float frameDuration = stateInfoPtr ? stateInfoPtr->frameDuration : 0.15f;
-      gameObjectManager.updateFrame(character, frameCount, frameTime, frameDuration);
+      sceneSystem.updateAnimationFrame(character, 6, frameTime, 0.15f);
 
       // game camera follows character
       const glm::vec3 gameCamOffset{-3.0f, -2.0f, 0.0f};
@@ -116,7 +116,7 @@ namespace lve {
         editorSystem.onRenderPassChanged(
           renderContext.getSwapChainRenderPass(),
           static_cast<uint32_t>(renderContext.getSwapChainImageCount()));
-        gameObjectManager.resetDescriptorCaches();
+        sceneSystem.resetDescriptorCaches();
       }
       if (commandBuffer) {
         renderContext.ensureOffscreenTargets(
@@ -138,7 +138,6 @@ namespace lve {
           normalViewEnabled,
           useOrthoCamera,
           sceneSystem,
-          gameObjectManager,
           characterId,
           viewerId,
           spriteAnimator,
@@ -176,13 +175,14 @@ namespace lve {
         const int frameIndex = lveRenderer.getFrameindex();
         // final step of update is updating the game objects buffer data
         // The render functions MUST not change a game objects transform data
-        gameObjectManager.updateBuffer(frameIndex);
+        sceneSystem.updateBuffers(frameIndex);
 
         if (renderContext.beginSceneViewRenderPass(commandBuffer)) {
+          sceneSystem.collectObjects(renderObjects);
           FrameInfo frameInfo = renderContext.makeFrameInfo(
             frameTime,
             editorCamera,
-            gameObjectManager.gameObjects,
+            renderObjects,
             commandBuffer);
 
           GlobalUbo ubo{};
@@ -199,10 +199,11 @@ namespace lve {
         }
 
         if (renderContext.beginGameViewRenderPass(commandBuffer)) {
+          sceneSystem.collectObjects(renderObjects);
           FrameInfo frameInfo = renderContext.makeFrameInfo(
             frameTime,
             gameCamera,
-            gameObjectManager.gameObjects,
+            renderObjects,
             commandBuffer);
 
           GlobalUbo ubo{};

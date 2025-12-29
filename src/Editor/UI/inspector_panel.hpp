@@ -23,6 +23,36 @@ namespace lve::editor {
     glm::vec3 scale{1.f};
   };
 
+  struct TexturePreviewCache {
+    std::shared_ptr<LveTexture> texture{};
+    VkDescriptorSet descriptor{VK_NULL_HANDLE};
+  };
+
+  struct InspectorState {
+    LveGameObject::id_t lastSelectedId{0};
+    bool transformEditing{false};
+    TransformSnapshot transformEditStart{};
+    bool nameEditing{false};
+    std::string nameEditStart{};
+    bool nodeOverrideEditing{false};
+    std::vector<NodeTransformOverride> nodeOverrideEditStart{};
+    bool gizmoWasUsing{false};
+    bool gizmoWasEditingNode{false};
+    const LveModel *lastSelectedModel{nullptr};
+    LveGameObject::id_t lastMaterialOwnerId{0};
+    std::string lastMaterialPath{};
+    const LveMaterial *lastMaterialPtr{nullptr};
+    MaterialData materialDraft{};
+    std::string materialDraftPath{};
+    bool materialDirty{false};
+    bool autoPreview{true};
+    TexturePreviewCache baseColorPreview{};
+    TexturePreviewCache normalPreview{};
+    TexturePreviewCache metallicPreview{};
+    TexturePreviewCache occlusionPreview{};
+    TexturePreviewCache emissivePreview{};
+  };
+
   enum class MaterialTextureSlot {
     BaseColor,
     Normal,
@@ -62,6 +92,7 @@ namespace lve::editor {
   InspectorActions BuildInspectorPanel(
     LveGameObject *selected,
     SpriteAnimator *animator,
+    InspectorState &state,
     const glm::mat4 &view,
     const glm::mat4 &projection,
     VkExtent2D viewportExtent,

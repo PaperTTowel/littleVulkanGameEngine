@@ -69,7 +69,8 @@ namespace lve {
     float animationTimeAccumulator = 0.0f;
     int atlasColumns{1};
     int atlasRows{1};
-    std::unordered_map<int, SpriteStateInfo> spriteStates{};
+    SpriteStateInfo spriteState{};
+    bool hasSpriteState{false};
     std::string spriteMetaPath;
     std::string spriteStateName;
     std::string modelPath;

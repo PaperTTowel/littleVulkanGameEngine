@@ -31,19 +31,16 @@ namespace lve::editor {
       }
     }
 
-    struct TexturePreviewCache {
-      std::shared_ptr<LveTexture> texture{};
-      VkDescriptorSet descriptor{VK_NULL_HANDLE};
-    };
-
-    ObjectState stateFromName(const std::string &name) {
-      if (name == "walking" || name == "walk") return ObjectState::WALKING;
-      return ObjectState::IDLE;
+    const char *defaultStateName(ObjectState state) {
+      return (state == ObjectState::WALKING) ? "walking" : "idle";
     }
 
-    std::string stateToName(const std::string &objStateName, ObjectState fallback) {
-      if (!objStateName.empty()) return objStateName;
-      return (fallback == ObjectState::WALKING) ? "walking" : "idle";
+    bool isWalkingStateName(const std::string &name) {
+      return name == "walking" || name == "walk";
+    }
+
+    bool isIdleStateName(const std::string &name) {
+      return name == "idle";
     }
 
     const char *typeLabel(const LveGameObject &obj) {
@@ -133,6 +130,7 @@ namespace lve::editor {
   InspectorActions BuildInspectorPanel(
     LveGameObject *selected,
     SpriteAnimator *animator,
+    InspectorState &state,
     const glm::mat4 &view,
     const glm::mat4 &projection,
     VkExtent2D viewportExtent,
@@ -163,60 +161,44 @@ namespace lve::editor {
       selected->transform.scale};
     std::string beforeName = selected->name;
 
-    static LveGameObject::id_t lastSelectedId = 0;
-    static bool transformEditing = false;
-    static TransformSnapshot transformEditStart{};
-    static bool nameEditing = false;
-    static std::string nameEditStart{};
-    static bool nodeOverrideEditing = false;
-    static std::vector<NodeTransformOverride> nodeOverrideEditStart{};
-    static const LveModel *lastSelectedModel = nullptr;
-    static LveGameObject::id_t lastMaterialOwnerId = 0;
-    static std::string lastMaterialPath{};
-    static const LveMaterial *lastMaterialPtr = nullptr;
-    static MaterialData materialDraft{};
-    static std::string materialDraftPath{};
-    static bool materialDirty = false;
-    static bool autoPreview = true;
-    static TexturePreviewCache baseColorPreview{};
-    static TexturePreviewCache normalPreview{};
-    static TexturePreviewCache metallicPreview{};
-    static TexturePreviewCache occlusionPreview{};
-    static TexturePreviewCache emissivePreview{};
 
-    if (lastSelectedId != selected->getId()) {
-      transformEditing = false;
-      nameEditing = false;
-      nodeOverrideEditing = false;
-      nodeOverrideEditStart.clear();
-      lastSelectedId = selected->getId();
-      lastSelectedModel = selected->model.get();
+    if (state.lastSelectedId != selected->getId()) {
+      state.transformEditing = false;
+      state.nameEditing = false;
+      state.nodeOverrideEditing = false;
+      state.nodeOverrideEditStart.clear();
+      state.gizmoWasUsing = false;
+      state.gizmoWasEditingNode = false;
+      state.lastSelectedId = selected->getId();
+      state.lastSelectedModel = selected->model.get();
       selectedNodeIndex = -1;
-    } else if (lastSelectedModel != selected->model.get()) {
-      nodeOverrideEditing = false;
-      nodeOverrideEditStart.clear();
-      lastSelectedModel = selected->model.get();
+    } else if (state.lastSelectedModel != selected->model.get()) {
+      state.nodeOverrideEditing = false;
+      state.nodeOverrideEditStart.clear();
+      state.gizmoWasUsing = false;
+      state.gizmoWasEditingNode = false;
+      state.lastSelectedModel = selected->model.get();
       selectedNodeIndex = -1;
     }
 
     auto refreshMaterialDraft = [&](const std::string &defaultPath) {
       if (selected->material) {
-        materialDraft = selected->material->getData();
+        state.materialDraft = selected->material->getData();
       } else {
-        materialDraft = MaterialData{};
+        state.materialDraft = MaterialData{};
       }
-      if (materialDraft.name.empty()) {
-        materialDraft.name = selected->name.empty()
+      if (state.materialDraft.name.empty()) {
+        state.materialDraft.name = selected->name.empty()
           ? ("Material_" + std::to_string(selected->getId()))
           : selected->name;
       }
-      materialDraftPath = selected->materialPath.empty()
+      state.materialDraftPath = selected->materialPath.empty()
         ? defaultPath
         : selected->materialPath;
-      materialDirty = false;
-      lastMaterialOwnerId = selected->getId();
-      lastMaterialPath = selected->materialPath;
-      lastMaterialPtr = selected->material.get();
+      state.materialDirty = false;
+      state.lastMaterialOwnerId = selected->getId();
+      state.lastMaterialPath = selected->materialPath;
+      state.lastMaterialPtr = selected->material.get();
     };
 
     auto applyMaterialPick = [&]() -> bool {
@@ -225,22 +207,22 @@ namespace lve::editor {
       }
       switch (materialPick.slot) {
         case MaterialTextureSlot::BaseColor:
-          materialDraft.textures.baseColor = materialPick.path;
+          state.materialDraft.textures.baseColor = materialPick.path;
           break;
         case MaterialTextureSlot::Normal:
-          materialDraft.textures.normal = materialPick.path;
+          state.materialDraft.textures.normal = materialPick.path;
           break;
         case MaterialTextureSlot::MetallicRoughness:
-          materialDraft.textures.metallicRoughness = materialPick.path;
+          state.materialDraft.textures.metallicRoughness = materialPick.path;
           break;
         case MaterialTextureSlot::Occlusion:
-          materialDraft.textures.occlusion = materialPick.path;
+          state.materialDraft.textures.occlusion = materialPick.path;
           break;
         case MaterialTextureSlot::Emissive:
-          materialDraft.textures.emissive = materialPick.path;
+          state.materialDraft.textures.emissive = materialPick.path;
           break;
       }
-      materialDirty = true;
+      state.materialDirty = true;
       return true;
     };
 
@@ -251,15 +233,15 @@ namespace lve::editor {
       selected->name = nameBuf;
     }
     if (ImGui::IsItemActivated()) {
-      nameEditing = true;
-      nameEditStart = beforeName;
+      state.nameEditing = true;
+      state.nameEditStart = beforeName;
     }
     const bool nameCommitted = ImGui::IsItemDeactivatedAfterEdit();
-    if (nameCommitted && nameEditing) {
-      nameEditing = false;
-      if (selected->name != nameEditStart) {
+    if (nameCommitted && state.nameEditing) {
+      state.nameEditing = false;
+      if (selected->name != state.nameEditStart) {
         actions.nameChanged = true;
-        actions.beforeName = nameEditStart;
+        actions.beforeName = state.nameEditStart;
         actions.afterName = selected->name;
       }
     }
@@ -276,9 +258,9 @@ namespace lve::editor {
     bool nodeOverrideCommitted = false;
     const bool posChanged = ImGui::DragFloat3("Position", &selected->transform.translation.x, 0.05f);
     if (posChanged) transformEdited = true;
-    if (ImGui::IsItemActivated() && !transformEditing) {
-      transformEditing = true;
-      transformEditStart = beforeTransform;
+    if (ImGui::IsItemActivated() && !state.transformEditing) {
+      state.transformEditing = true;
+      state.transformEditStart = beforeTransform;
     }
     if (ImGui::IsItemDeactivatedAfterEdit()) {
       transformCommitted = true;
@@ -286,9 +268,9 @@ namespace lve::editor {
 
     const bool rotChanged = ImGui::DragFloat3("Rotation (rad)", &selected->transform.rotation.x, 0.05f);
     if (rotChanged) transformEdited = true;
-    if (ImGui::IsItemActivated() && !transformEditing) {
-      transformEditing = true;
-      transformEditStart = beforeTransform;
+    if (ImGui::IsItemActivated() && !state.transformEditing) {
+      state.transformEditing = true;
+      state.transformEditStart = beforeTransform;
     }
     if (ImGui::IsItemDeactivatedAfterEdit()) {
       transformCommitted = true;
@@ -296,9 +278,9 @@ namespace lve::editor {
 
     const bool scaleChanged = ImGui::DragFloat3("Scale", &selected->transform.scale.x, 0.05f, 0.001f, 100.f);
     if (scaleChanged) transformEdited = true;
-    if (ImGui::IsItemActivated() && !transformEditing) {
-      transformEditing = true;
-      transformEditStart = beforeTransform;
+    if (ImGui::IsItemActivated() && !state.transformEditing) {
+      state.transformEditing = true;
+      state.transformEditStart = beforeTransform;
     }
     if (ImGui::IsItemDeactivatedAfterEdit()) {
       transformCommitted = true;
@@ -329,9 +311,9 @@ namespace lve::editor {
     }
 
     auto beginNodeOverrideEdit = [&]() {
-      if (!nodeOverrideEditing) {
-        nodeOverrideEditing = true;
-        nodeOverrideEditStart = nodeOverridesBeforeFrame;
+      if (!state.nodeOverrideEditing) {
+        state.nodeOverrideEditing = true;
+        state.nodeOverrideEditStart = nodeOverridesBeforeFrame;
       }
     };
     const bool editNode = hasNodes && selectedNodeIndex >= 0;
@@ -371,8 +353,6 @@ namespace lve::editor {
     float modelArr[16];
     std::memcpy(modelArr, glm::value_ptr(model), sizeof(modelArr));
 
-    static bool gizmoWasUsing = false;
-    static bool gizmoWasEditingNode = false;
     bool gizmoUsing = false;
     if (gizmoContext.valid && gizmoContext.drawList) {
       ImGuizmo::Manipulate(
@@ -416,45 +396,45 @@ namespace lve::editor {
           selected->transform.rotation = glm::radians(glm::vec3{rotDeg[0], rotDeg[1], rotDeg[2]});
           selected->transform.scale = glm::vec3{scale[0], scale[1], scale[2]};
           transformEdited = true;
-          if (!transformEditing) {
-            transformEditing = true;
-            transformEditStart = beforeTransform;
+          if (!state.transformEditing) {
+            state.transformEditing = true;
+            state.transformEditStart = beforeTransform;
           }
         }
-        gizmoWasEditingNode = editNode && activeNodeIndex >= 0 && selected->model;
+        state.gizmoWasEditingNode = editNode && activeNodeIndex >= 0 && selected->model;
       }
     }
 
-    if (gizmoWasUsing && !gizmoUsing) {
-      if (gizmoWasEditingNode) {
+    if (state.gizmoWasUsing && !gizmoUsing) {
+      if (state.gizmoWasEditingNode) {
         nodeOverrideCommitted = true;
       } else {
         transformCommitted = true;
       }
-      gizmoWasEditingNode = false;
+      state.gizmoWasEditingNode = false;
     }
-    gizmoWasUsing = gizmoUsing;
+    state.gizmoWasUsing = gizmoUsing;
     if (transformEdited) {
       selected->transformDirty = true;
     }
-    if (transformCommitted && transformEditing) {
+    if (transformCommitted && state.transformEditing) {
       actions.transformChanged = true;
       actions.transformCommitted = true;
-      actions.beforeTransform = transformEditStart;
+      actions.beforeTransform = state.transformEditStart;
       actions.afterTransform = {
         selected->transform.translation,
         selected->transform.rotation,
         selected->transform.scale};
-      transformEditing = false;
+      state.transformEditing = false;
     }
-    if (nodeOverrideCommitted && nodeOverrideEditing) {
-      if (!nodeOverridesEqual(nodeOverrideEditStart, selected->nodeOverrides)) {
+    if (nodeOverrideCommitted && state.nodeOverrideEditing) {
+      if (!nodeOverridesEqual(state.nodeOverrideEditStart, selected->nodeOverrides)) {
         actions.nodeOverridesChanged = true;
         actions.nodeOverridesCommitted = true;
-        actions.beforeNodeOverrides = nodeOverrideEditStart;
+        actions.beforeNodeOverrides = state.nodeOverrideEditStart;
         actions.afterNodeOverrides = selected->nodeOverrides;
       }
-      nodeOverrideEditing = false;
+      state.nodeOverrideEditing = false;
     }
 
     if (selected->pointLight) {
@@ -477,7 +457,10 @@ namespace lve::editor {
       }
       std::sort(stateNames.begin(), stateNames.end());
 
-      std::string currentName = stateToName(selected->spriteStateName, selected->objState);
+      std::string currentName = selected->spriteStateName;
+      if (currentName.empty()) {
+        currentName = defaultStateName(selected->objState);
+      }
       int currentIndex = 0;
       for (int i = 0; i < static_cast<int>(stateNames.size()); ++i) {
         if (stateNames[i] == currentName) {
@@ -492,9 +475,13 @@ namespace lve::editor {
         for (auto &s : stateNames) labels.push_back(s.c_str());
         if (ImGui::Combo("State", &currentIndex, labels.data(), static_cast<int>(labels.size()))) {
           const std::string &chosen = stateNames[currentIndex];
-          selected->objState = stateFromName(chosen);
           selected->spriteStateName = chosen;
-          animator->applySpriteState(*selected, selected->objState);
+          if (isWalkingStateName(chosen)) {
+            selected->objState = ObjectState::WALKING;
+          } else if (isIdleStateName(chosen)) {
+            selected->objState = ObjectState::IDLE;
+          }
+          animator->applySpriteState(*selected, chosen);
         }
       }
 
@@ -508,9 +495,9 @@ namespace lve::editor {
     if (selected->model && !selected->isSprite && !selected->pointLight) {
       const std::string defaultMaterialPath =
         "Assets/materials/Material_" + std::to_string(selected->getId()) + ".mat";
-      if (lastMaterialOwnerId != selected->getId() ||
-          lastMaterialPath != selected->materialPath ||
-          lastMaterialPtr != selected->material.get()) {
+      if (state.lastMaterialOwnerId != selected->getId() ||
+          state.lastMaterialPath != selected->materialPath ||
+          state.lastMaterialPtr != selected->material.get()) {
         refreshMaterialDraft(defaultMaterialPath);
       }
       bool materialChangedThisFrame = applyMaterialPick();
@@ -518,49 +505,49 @@ namespace lve::editor {
 
       ImGui::Separator();
       ImGui::Text("Material");
-      if (materialDirty) {
+      if (state.materialDirty) {
         ImGui::TextColored(ImVec4(1.f, 0.7f, 0.2f, 1.f), "Unsaved changes");
       }
 
       char pathBuf[256];
-      std::snprintf(pathBuf, sizeof(pathBuf), "%s", materialDraftPath.c_str());
+      std::snprintf(pathBuf, sizeof(pathBuf), "%s", state.materialDraftPath.c_str());
       if (ImGui::InputText("Material Path", pathBuf, sizeof(pathBuf))) {
-        materialDraftPath = pathBuf;
+        state.materialDraftPath = pathBuf;
       }
 
       char nameBuf[128];
-      std::snprintf(nameBuf, sizeof(nameBuf), "%s", materialDraft.name.c_str());
+      std::snprintf(nameBuf, sizeof(nameBuf), "%s", state.materialDraft.name.c_str());
       if (ImGui::InputText("Name##Material", nameBuf, sizeof(nameBuf))) {
-        materialDraft.name = nameBuf;
-        materialDirty = true;
+        state.materialDraft.name = nameBuf;
+        state.materialDirty = true;
       }
 
-      if (ImGui::ColorEdit4("Base Color", &materialDraft.factors.baseColor.x)) {
-        materialDirty = true;
+      if (ImGui::ColorEdit4("Base Color", &state.materialDraft.factors.baseColor.x)) {
+        state.materialDirty = true;
         materialChangedThisFrame = true;
       }
-      if (ImGui::SliderFloat("Metallic", &materialDraft.factors.metallic, 0.f, 1.f)) {
-        materialDirty = true;
+      if (ImGui::SliderFloat("Metallic", &state.materialDraft.factors.metallic, 0.f, 1.f)) {
+        state.materialDirty = true;
         materialChangedThisFrame = true;
       }
-      if (ImGui::SliderFloat("Roughness", &materialDraft.factors.roughness, 0.f, 1.f)) {
-        materialDirty = true;
+      if (ImGui::SliderFloat("Roughness", &state.materialDraft.factors.roughness, 0.f, 1.f)) {
+        state.materialDirty = true;
         materialChangedThisFrame = true;
       }
-      if (ImGui::ColorEdit3("Emissive", &materialDraft.factors.emissive.x)) {
-        materialDirty = true;
+      if (ImGui::ColorEdit3("Emissive", &state.materialDraft.factors.emissive.x)) {
+        state.materialDirty = true;
         materialChangedThisFrame = true;
       }
-      if (ImGui::SliderFloat("Occlusion", &materialDraft.factors.occlusionStrength, 0.f, 1.f)) {
-        materialDirty = true;
+      if (ImGui::SliderFloat("Occlusion", &state.materialDraft.factors.occlusionStrength, 0.f, 1.f)) {
+        state.materialDirty = true;
         materialChangedThisFrame = true;
       }
-      if (ImGui::SliderFloat("Normal Scale", &materialDraft.factors.normalScale, 0.f, 2.f)) {
-        materialDirty = true;
+      if (ImGui::SliderFloat("Normal Scale", &state.materialDraft.factors.normalScale, 0.f, 2.f)) {
+        state.materialDirty = true;
         materialChangedThisFrame = true;
       }
 
-      ImGui::Checkbox("Auto Preview", &autoPreview);
+      ImGui::Checkbox("Auto Preview", &state.autoPreview);
 
       auto editTexturePath = [&](const char *label,
                                  MaterialTextureSlot slot,
@@ -576,7 +563,7 @@ namespace lve::editor {
         std::snprintf(buf, sizeof(buf), "%s", value.c_str());
         if (ImGui::InputText("##path", buf, sizeof(buf))) {
           value = buf;
-          materialDirty = true;
+          state.materialDirty = true;
         }
         if (ImGui::IsItemDeactivatedAfterEdit()) {
           changed = true;
@@ -587,7 +574,7 @@ namespace lve::editor {
               std::string dropped(static_cast<const char *>(payload->Data));
               if (isTextureFile(dropped)) {
                 value = dropped;
-                materialDirty = true;
+                state.materialDirty = true;
                 changed = true;
               }
             }
@@ -602,7 +589,7 @@ namespace lve::editor {
         ImGui::SameLine();
         if (ImGui::SmallButton("Clear")) {
           value.clear();
-          materialDirty = true;
+          state.materialDirty = true;
           changed = true;
         }
         if (previewTexture) {
@@ -641,41 +628,41 @@ namespace lve::editor {
       const std::shared_ptr<LveTexture> emissiveTex =
         selected->material ? selected->material->getEmissiveTexture() : nullptr;
 
-      if (editTexturePath("Base Color Tex", MaterialTextureSlot::BaseColor, materialDraft.textures.baseColor, baseColorTex, baseColorPreview)) {
+      if (editTexturePath("Base Color Tex", MaterialTextureSlot::BaseColor, state.materialDraft.textures.baseColor, baseColorTex, state.baseColorPreview)) {
         materialChangedThisFrame = true;
       }
-      if (editTexturePath("Normal Tex", MaterialTextureSlot::Normal, materialDraft.textures.normal, normalTex, normalPreview)) {
+      if (editTexturePath("Normal Tex", MaterialTextureSlot::Normal, state.materialDraft.textures.normal, normalTex, state.normalPreview)) {
         materialChangedThisFrame = true;
       }
-      if (editTexturePath("Metallic/Roughness Tex", MaterialTextureSlot::MetallicRoughness, materialDraft.textures.metallicRoughness, metallicTex, metallicPreview)) {
+      if (editTexturePath("Metallic/Roughness Tex", MaterialTextureSlot::MetallicRoughness, state.materialDraft.textures.metallicRoughness, metallicTex, state.metallicPreview)) {
         materialChangedThisFrame = true;
       }
-      if (editTexturePath("Occlusion Tex", MaterialTextureSlot::Occlusion, materialDraft.textures.occlusion, occlusionTex, occlusionPreview)) {
+      if (editTexturePath("Occlusion Tex", MaterialTextureSlot::Occlusion, state.materialDraft.textures.occlusion, occlusionTex, state.occlusionPreview)) {
         materialChangedThisFrame = true;
       }
-      if (editTexturePath("Emissive Tex", MaterialTextureSlot::Emissive, materialDraft.textures.emissive, emissiveTex, emissivePreview)) {
+      if (editTexturePath("Emissive Tex", MaterialTextureSlot::Emissive, state.materialDraft.textures.emissive, emissiveTex, state.emissivePreview)) {
         materialChangedThisFrame = true;
       }
 
       ImGui::Spacing();
-      ImGui::BeginDisabled(materialDraftPath.empty());
+      ImGui::BeginDisabled(state.materialDraftPath.empty());
       if (ImGui::Button("Apply Path")) {
         actions.materialLoadRequested = true;
-        actions.materialPath = materialDraftPath;
+        actions.materialPath = state.materialDraftPath;
       }
       ImGui::SameLine();
       if (ImGui::Button("Save Material")) {
         actions.materialSaveRequested = true;
-        actions.materialPath = materialDraftPath;
-        actions.materialData = materialDraft;
-        materialDirty = false;
+        actions.materialPath = state.materialDraftPath;
+        actions.materialData = state.materialDraft;
+        state.materialDirty = false;
       }
-      if (!autoPreview) {
+      if (!state.autoPreview) {
         ImGui::SameLine();
         if (ImGui::Button("Preview")) {
           actions.materialPreviewRequested = true;
-          actions.materialPath = materialDraftPath;
-          actions.materialData = materialDraft;
+          actions.materialPath = state.materialDraftPath;
+          actions.materialData = state.materialDraft;
         }
       }
       ImGui::SameLine();
@@ -688,10 +675,10 @@ namespace lve::editor {
         actions.materialClearRequested = true;
       }
 
-      if (autoPreview && materialChangedThisFrame && !materialDraftPath.empty()) {
+      if (state.autoPreview && materialChangedThisFrame && !state.materialDraftPath.empty()) {
         actions.materialPreviewRequested = true;
-        actions.materialPath = materialDraftPath;
-        actions.materialData = materialDraft;
+        actions.materialPath = state.materialDraftPath;
+        actions.materialData = state.materialDraft;
       }
 
       ImGui::Separator();

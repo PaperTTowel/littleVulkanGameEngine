@@ -1,5 +1,8 @@
 #include "editor_system.hpp"
 
+#include "Editor/History/editor_snapshot.hpp"
+#include "Editor/Tools/editor_picking.hpp"
+#include "Editor/Workflow/editor_import.hpp"
 #include "Engine/scene_system.hpp"
 
 #include <imgui.h>
@@ -7,439 +10,16 @@
 #include <glm/glm.hpp>
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <limits>
 #include <string>
+#include <vector>
 
 namespace lve {
 
-  namespace {
-    namespace fs = std::filesystem;
-
-    struct GameObjectSnapshot {
-      LveGameObject::id_t id{0};
-      bool isSprite{false};
-      bool isPointLight{false};
-      editor::TransformSnapshot transform{};
-      glm::vec3 color{1.f, 1.f, 1.f};
-      float lightIntensity{1.f};
-      ObjectState objState{ObjectState::IDLE};
-      BillboardMode billboardMode{BillboardMode::None};
-      std::string spriteMetaPath{};
-      std::string spriteStateName{};
-      std::string modelPath{};
-      std::string materialPath{};
-      std::vector<NodeTransformOverride> nodeOverrides{};
-      std::string name{};
-    };
-
-    GameObjectSnapshot captureSnapshot(const LveGameObject &obj) {
-      GameObjectSnapshot snapshot{};
-      snapshot.id = obj.getId();
-      snapshot.isSprite = obj.isSprite;
-      snapshot.isPointLight = obj.pointLight != nullptr;
-      snapshot.transform = {obj.transform.translation, obj.transform.rotation, obj.transform.scale};
-      snapshot.color = obj.color;
-      snapshot.objState = obj.objState;
-      snapshot.billboardMode = obj.billboardMode;
-      snapshot.spriteMetaPath = obj.spriteMetaPath;
-      snapshot.spriteStateName = obj.spriteStateName;
-      snapshot.modelPath = obj.modelPath;
-      snapshot.materialPath = obj.materialPath;
-      snapshot.nodeOverrides = obj.nodeOverrides;
-      snapshot.name = obj.name;
-      if (obj.pointLight) {
-        snapshot.lightIntensity = obj.pointLight->lightIntensity;
-      }
-      return snapshot;
-    }
-
-    void restoreSnapshot(
-      SceneSystem &sceneSystem,
-      SpriteAnimator *animator,
-      const GameObjectSnapshot &snapshot) {
-      if (snapshot.isPointLight) {
-        auto &obj = sceneSystem.createPointLightObjectWithId(
-          snapshot.id,
-          snapshot.transform.translation,
-          snapshot.lightIntensity,
-          snapshot.transform.scale.x,
-          snapshot.color);
-        obj.transform.rotation = snapshot.transform.rotation;
-        obj.transform.scale = snapshot.transform.scale;
-        obj.name = snapshot.name;
-        obj.transformDirty = true;
-        return;
-      }
-
-      if (snapshot.isSprite) {
-        auto &obj = sceneSystem.createSpriteObjectWithId(
-          snapshot.id,
-          snapshot.transform.translation,
-          snapshot.objState,
-          snapshot.spriteMetaPath);
-        obj.transform.rotation = snapshot.transform.rotation;
-        obj.transform.scale = snapshot.transform.scale;
-        obj.billboardMode = snapshot.billboardMode;
-        obj.name = snapshot.name;
-        if (!snapshot.spriteStateName.empty()) {
-          obj.spriteStateName = snapshot.spriteStateName;
-        }
-        if (animator) {
-          animator->applySpriteState(obj, obj.objState);
-        }
-        obj.transformDirty = true;
-        return;
-      }
-
-      auto &obj = sceneSystem.createMeshObjectWithId(
-        snapshot.id,
-        snapshot.transform.translation,
-        snapshot.modelPath);
-      obj.transform.rotation = snapshot.transform.rotation;
-      obj.transform.scale = snapshot.transform.scale;
-      obj.name = snapshot.name;
-      if (!snapshot.materialPath.empty()) {
-        sceneSystem.applyMaterialToObject(obj, snapshot.materialPath);
-      }
-      if (!snapshot.nodeOverrides.empty()) {
-        sceneSystem.ensureNodeOverrides(obj);
-        obj.nodeOverrides = snapshot.nodeOverrides;
-      }
-      obj.transformDirty = true;
-    }
-
-    std::string toLowerCopy(const std::string &value) {
-      std::string out;
-      out.reserve(value.size());
-      for (char ch : value) {
-        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-      }
-      return out;
-    }
-
-    bool hasExtension(const fs::path &path, std::initializer_list<const char *> exts) {
-      const std::string ext = toLowerCopy(path.extension().string());
-      for (const char *candidate : exts) {
-        if (ext == toLowerCopy(candidate)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    bool isMeshFile(const fs::path &path) {
-      return hasExtension(path, {".obj", ".fbx", ".gltf", ".glb"});
-    }
-
-    bool isSpriteMetaFile(const fs::path &path) {
-      return hasExtension(path, {".json"});
-    }
-
-    bool isMaterialFile(const fs::path &path) {
-      return hasExtension(path, {".mat"});
-    }
-
-    bool isTextureFile(const fs::path &path) {
-      return hasExtension(path, {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr", ".tiff", ".ktx", ".ktx2"});
-    }
-
-    std::string pickImportSubdir(const fs::path &path) {
-      if (isMeshFile(path)) return "models";
-      if (isMaterialFile(path)) return "materials";
-      if (isTextureFile(path) || isSpriteMetaFile(path)) return "textures";
-      return "imported";
-    }
-
-    fs::path makeUniquePath(const fs::path &path) {
-      std::error_code ec;
-      if (!fs::exists(path, ec)) {
-        return path;
-      }
-      const fs::path parent = path.parent_path();
-      const std::string stem = path.stem().string();
-      const std::string ext = path.extension().string();
-      for (int i = 1; i < 1000; ++i) {
-        fs::path candidate = parent / (stem + "_" + std::to_string(i) + ext);
-        if (!fs::exists(candidate, ec)) {
-          return candidate;
-        }
-      }
-      return path;
-    }
-
-    bool copyIntoAssets(
-      const fs::path &source,
-      const std::string &root,
-      fs::path &outPath,
-      std::string &outError) {
-      std::error_code ec;
-      if (!fs::exists(source, ec) || fs::is_directory(source, ec)) {
-        outError = "Source file not found";
-        return false;
-      }
-      fs::path rootPath = root.empty() ? fs::path("Assets") : fs::path(root);
-      fs::path targetDir = rootPath / pickImportSubdir(source);
-      fs::create_directories(targetDir, ec);
-      if (ec) {
-        outError = "Failed to create target directory";
-        return false;
-      }
-      fs::path destPath = makeUniquePath(targetDir / source.filename());
-      fs::copy_file(source, destPath, fs::copy_options::none, ec);
-      if (ec) {
-        outError = "Copy failed";
-        return false;
-      }
-      outPath = destPath;
-      return true;
-    }
-
-    fs::path normalizePath(const fs::path &path) {
-      std::error_code ec;
-      fs::path normalized = fs::weakly_canonical(path, ec);
-      if (ec) {
-        normalized = path.lexically_normal();
-      }
-      return normalized;
-    }
-
-    bool isSubPath(const fs::path &path, const fs::path &base) {
-      auto pathIt = path.begin();
-      auto baseIt = base.begin();
-      for (; baseIt != base.end(); ++baseIt, ++pathIt) {
-        if (pathIt == path.end()) return false;
-        if (*pathIt != *baseIt) return false;
-      }
-      return true;
-    }
-
-    std::string toAssetPath(const std::string &path, const std::string &root) {
-      if (path.empty()) return {};
-      fs::path inputPath(path);
-      if (!inputPath.is_absolute()) {
-        return inputPath.generic_string();
-      }
-      fs::path rootPath = root.empty() ? fs::path("Assets") : fs::path(root);
-      const fs::path normalizedRoot = normalizePath(rootPath);
-      const fs::path normalizedInput = normalizePath(inputPath);
-      if (isSubPath(normalizedInput, normalizedRoot)) {
-        std::error_code ec;
-        fs::path rel = fs::relative(normalizedInput, normalizedRoot, ec);
-        if (!ec) {
-          return (rootPath / rel).generic_string();
-        }
-      }
-      return inputPath.generic_string();
-    }
-
-    bool createMaterialInstance(
-      SceneSystem &sceneSystem,
-      const std::string &sourcePath,
-      const LveModel *model,
-      LveGameObject::id_t objectId,
-      const std::string &root,
-      std::string &outPath,
-      std::string &outError) {
-      MaterialData data{};
-      if (!sourcePath.empty()) {
-        auto material = sceneSystem.loadMaterialCached(sourcePath);
-        if (material) {
-          data = material->getData();
-        }
-      }
-      if (data.name.empty()) {
-        data.name = "Material_" + std::to_string(objectId);
-      }
-      if (data.textures.baseColor.empty() && model) {
-        std::string diffusePath;
-        const auto &subMeshes = model->getSubMeshes();
-        for (const auto &subMesh : subMeshes) {
-          diffusePath = model->getDiffusePathForSubMesh(subMesh);
-          if (!diffusePath.empty()) {
-            break;
-          }
-        }
-        if (diffusePath.empty()) {
-          const auto &infos = model->getMaterialPathInfo();
-          for (std::size_t i = 0; i < infos.size(); ++i) {
-            diffusePath = model->getDiffusePathForMaterialIndex(static_cast<int>(i));
-            if (!diffusePath.empty()) {
-              break;
-            }
-          }
-        }
-        if (!diffusePath.empty()) {
-          data.textures.baseColor = toAssetPath(diffusePath, root);
-        }
-      }
-
-      fs::path rootPath = root.empty() ? fs::path("Assets") : fs::path(root);
-      fs::path targetDir = rootPath / "materials";
-      fs::path targetPath = makeUniquePath(targetDir / (data.name + ".mat"));
-      std::string error;
-      if (!LveMaterial::saveToFile(targetPath.generic_string(), data, &error)) {
-        outError = error.empty() ? "Failed to save material instance" : error;
-        return false;
-      }
-      outPath = targetPath.generic_string();
-      sceneSystem.getAssetDatabase().registerAsset(outPath);
-      return true;
-    }
-
-    bool createLinkStub(
-      const fs::path &source,
-      const std::string &root,
-      fs::path &outPath,
-      std::string &outError) {
-      std::error_code ec;
-      if (!fs::exists(source, ec) || fs::is_directory(source, ec)) {
-        outError = "Source file not found";
-        return false;
-      }
-      fs::path rootPath = root.empty() ? fs::path("Assets") : fs::path(root);
-      fs::path targetDir = rootPath / "links";
-      fs::create_directories(targetDir, ec);
-      if (ec) {
-        outError = "Failed to create link directory";
-        return false;
-      }
-      fs::path destPath = makeUniquePath(targetDir / source.filename());
-      std::ofstream file(destPath, std::ios::out | std::ios::binary | std::ios::trunc);
-      if (!file) {
-        outError = "Failed to create link stub";
-        return false;
-      }
-      outPath = destPath;
-      return true;
-    }
-
-    struct Ray {
-      glm::vec3 origin{};
-      glm::vec3 direction{};
-      bool valid{false};
-    };
-
-    Ray buildPickRay(const ViewportInfo &view, const glm::mat4 &viewMat, const glm::mat4 &projMat) {
-      Ray ray{};
-      if (!view.visible || view.width == 0 || view.height == 0) return ray;
-
-      const float relX = (view.mousePosX - view.x) / static_cast<float>(view.width);
-      const float relY = (view.mousePosY - view.y) / static_cast<float>(view.height);
-      if (relX < 0.f || relX > 1.f || relY < 0.f || relY > 1.f) return ray;
-
-      const float ndcX = relX * 2.f - 1.f;
-      const float ndcY = relY * 2.f - 1.f;
-      const glm::mat4 inv = glm::inverse(projMat * viewMat);
-
-      glm::vec4 nearClip{ndcX, ndcY, 0.f, 1.f};
-      glm::vec4 farClip{ndcX, ndcY, 1.f, 1.f};
-      glm::vec4 nearWorld = inv * nearClip;
-      glm::vec4 farWorld = inv * farClip;
-      if (nearWorld.w == 0.f || farWorld.w == 0.f) return ray;
-      nearWorld /= nearWorld.w;
-      farWorld /= farWorld.w;
-
-      ray.origin = glm::vec3(nearWorld);
-      ray.direction = glm::normalize(glm::vec3(farWorld - nearWorld));
-      ray.valid = true;
-      return ray;
-    }
-
-    bool intersectSphere(const Ray &ray, const glm::vec3 &center, float radius, float &tHit) {
-      glm::vec3 oc = ray.origin - center;
-      float b = glm::dot(oc, ray.direction);
-      float c = glm::dot(oc, oc) - radius * radius;
-      float h = b * b - c;
-      if (h < 0.f) return false;
-      h = std::sqrt(h);
-      float t = -b - h;
-      if (t < 0.f) t = -b + h;
-      if (t < 0.f) return false;
-      tHit = t;
-      return true;
-    }
-
-    bool intersectAabbLocal(
-      const glm::vec3 &origin,
-      const glm::vec3 &dir,
-      const glm::vec3 &min,
-      const glm::vec3 &max,
-      float &tHit) {
-      float tMin = -std::numeric_limits<float>::infinity();
-      float tMax = std::numeric_limits<float>::infinity();
-
-      for (int axis = 0; axis < 3; ++axis) {
-        const float o = origin[axis];
-        const float d = dir[axis];
-        if (std::abs(d) < 1e-6f) {
-          if (o < min[axis] || o > max[axis]) return false;
-          continue;
-        }
-        float invD = 1.0f / d;
-        float t1 = (min[axis] - o) * invD;
-        float t2 = (max[axis] - o) * invD;
-        if (t1 > t2) std::swap(t1, t2);
-        tMin = std::max(tMin, t1);
-        tMax = std::min(tMax, t2);
-        if (tMin > tMax) return false;
-      }
-
-      if (tMax < 0.f) return false;
-      tHit = (tMin >= 0.f) ? tMin : tMax;
-      return true;
-    }
-
-    void transformAabb(
-      const glm::mat4 &transform,
-      const glm::vec3 &min,
-      const glm::vec3 &max,
-      glm::vec3 &outMin,
-      glm::vec3 &outMax) {
-      outMin = glm::vec3(std::numeric_limits<float>::max());
-      outMax = glm::vec3(std::numeric_limits<float>::lowest());
-      glm::vec3 corners[8] = {
-        {min.x, min.y, min.z},
-        {max.x, min.y, min.z},
-        {min.x, max.y, min.z},
-        {max.x, max.y, min.z},
-        {min.x, min.y, max.z},
-        {max.x, min.y, max.z},
-        {min.x, max.y, max.z},
-        {max.x, max.y, max.z}
-      };
-      for (const auto &corner : corners) {
-        glm::vec3 world = glm::vec3(transform * glm::vec4(corner, 1.f));
-        outMin = glm::min(outMin, world);
-        outMax = glm::max(outMax, world);
-      }
-    }
-
-    bool intersectBillboardQuad(
-      const Ray &ray,
-      const glm::vec3 &center,
-      const glm::vec3 &right,
-      const glm::vec3 &up,
-      const glm::vec2 &halfSize,
-      float &tHit) {
-      const glm::vec3 normal = glm::normalize(glm::cross(right, up));
-      float denom = glm::dot(normal, ray.direction);
-      if (std::abs(denom) < 1e-6f) return false;
-      float t = glm::dot(center - ray.origin, normal) / denom;
-      if (t < 0.f) return false;
-      glm::vec3 hit = ray.origin + ray.direction * t;
-      glm::vec3 delta = hit - center;
-      float localX = glm::dot(delta, right);
-      float localY = glm::dot(delta, up);
-      if (std::abs(localX) > halfSize.x || std::abs(localY) > halfSize.y) return false;
-      tHit = t;
-      return true;
-    }
-  } // namespace
+  namespace fs = std::filesystem;
 
   EditorSystem::EditorSystem(LveWindow &window, LveDevice &device)
     : imgui{window, device}, device{device} {
@@ -468,7 +48,6 @@ namespace lve {
     bool &normalViewEnabled,
     bool &useOrthoCamera,
     SceneSystem &sceneSystem,
-    LveGameObjectManager &gameObjectManager,
     LveGameObject::id_t protectedId,
     LveGameObject::id_t viewerId,
     SpriteAnimator *&animator,
@@ -480,6 +59,66 @@ namespace lve {
     void *gameViewTextureId) {
 
     EditorFrameResult result{};
+
+    std::vector<LveGameObject*> objects;
+    sceneSystem.collectObjects(objects);
+
+    buildFrameUI(
+      result,
+      frameTime,
+      cameraPos,
+      cameraRot,
+      wireframeEnabled,
+      normalViewEnabled,
+      useOrthoCamera,
+      sceneSystem,
+      objects,
+      protectedId,
+      animator,
+      view,
+      projection,
+      viewportExtent,
+      resourceBrowserState,
+      sceneViewTextureId,
+      gameViewTextureId);
+
+    const bool historyTriggered = applyHistoryActions(result, sceneSystem);
+
+    applyResourceActions(result, sceneSystem, animator, resourceBrowserState);
+    applyInspectorActions(result, sceneSystem, animator, resourceBrowserState);
+    handlePicking(result, objects, view, projection);
+    handleCreateDelete(
+      result,
+      sceneSystem,
+      animator,
+      view,
+      cameraPos,
+      resourceBrowserState,
+      protectedId,
+      historyTriggered);
+    handleSceneActions(result, sceneSystem, animator, viewerId);
+
+    return result;
+  }
+
+  void EditorSystem::buildFrameUI(
+    EditorFrameResult &result,
+    float frameTime,
+    const glm::vec3 &cameraPos,
+    const glm::vec3 &cameraRot,
+    bool &wireframeEnabled,
+    bool &normalViewEnabled,
+    bool &useOrthoCamera,
+    SceneSystem &sceneSystem,
+    const std::vector<LveGameObject*> &objects,
+    LveGameObject::id_t protectedId,
+    SpriteAnimator *&animator,
+    const glm::mat4 &view,
+    const glm::mat4 &projection,
+    VkExtent2D viewportExtent,
+    editor::ResourceBrowserState &resourceBrowserState,
+    void *sceneViewTextureId,
+    void *gameViewTextureId) {
 
     imgui.newFrame();
     imgui.buildUI(
@@ -659,7 +298,11 @@ namespace lve {
     }
 
     if (showHierarchy) {
-    result.hierarchyActions = editor::BuildHierarchyPanel(gameObjectManager, hierarchyState, protectedId, &showHierarchy);
+      result.hierarchyActions = editor::BuildHierarchyPanel(
+        objects,
+        hierarchyState,
+        protectedId,
+        &showHierarchy);
     }
 
     if (showScene) {
@@ -669,10 +312,7 @@ namespace lve {
     }
 
     if (hierarchyState.selectedId) {
-      auto itSel = gameObjectManager.gameObjects.find(*hierarchyState.selectedId);
-      if (itSel != gameObjectManager.gameObjects.end()) {
-        result.selectedObject = &itSel->second;
-      }
+      result.selectedObject = sceneSystem.findObject(*hierarchyState.selectedId);
     }
 
     if (showInspector) {
@@ -680,6 +320,7 @@ namespace lve {
       result.inspectorActions = editor::BuildInspectorPanel(
         result.selectedObject,
         animator,
+        inspectorState,
         view,
         projection,
         viewportExtent,
@@ -695,7 +336,10 @@ namespace lve {
     }
 
     if (showResourceBrowser) {
-      result.resourceActions = editor::BuildResourceBrowserPanel(resourceBrowserState, result.selectedObject, &showResourceBrowser);
+      result.resourceActions = editor::BuildResourceBrowserPanel(
+        resourceBrowserState,
+        result.selectedObject,
+        &showResourceBrowser);
     }
 
     if (showFileDialog) {
@@ -715,7 +359,7 @@ namespace lve {
           : resourceBrowserState.browser.rootPath;
         pendingMaterialPick.available = true;
         pendingMaterialPick.slot = pendingMaterialPickSlot;
-        pendingMaterialPick.path = toAssetPath(result.fileDialogActions.selectedPath, rootPath);
+        pendingMaterialPick.path = editor::workflow::ToAssetPath(result.fileDialogActions.selectedPath, rootPath);
       }
       fileDialogPurpose = FileDialogPurpose::Import;
     }
@@ -745,7 +389,7 @@ namespace lve {
         if (!importOptions.pendingPath.empty()) {
           fs::path targetDir = fs::path(root) / "links";
           if (importOptions.mode == 1) {
-            targetDir = fs::path(root) / pickImportSubdir(srcPath);
+            targetDir = fs::path(root) / editor::workflow::PickImportSubdir(srcPath);
           }
           previewTarget = (targetDir / srcPath.filename()).generic_string();
         }
@@ -776,7 +420,7 @@ namespace lve {
           fs::path importedPath;
 
           if (importOptions.mode == 1) {
-            if (!copyIntoAssets(sourcePath, resourceBrowserState.browser.rootPath, importedPath, importOptions.error)) {
+            if (!editor::workflow::CopyIntoAssets(sourcePath, resourceBrowserState.browser.rootPath, importedPath, importOptions.error)) {
               doImport = false;
             } else {
               finalPath = importedPath.generic_string();
@@ -785,7 +429,7 @@ namespace lve {
               sceneSystem.getAssetDatabase().registerAsset(finalPath);
             }
           } else {
-            if (!createLinkStub(sourcePath, resourceBrowserState.browser.rootPath, importedPath, importOptions.error)) {
+            if (!editor::workflow::CreateLinkStub(sourcePath, resourceBrowserState.browser.rootPath, importedPath, importOptions.error)) {
               doImport = false;
             } else {
               finalPath = importedPath.generic_string();
@@ -796,11 +440,11 @@ namespace lve {
           }
 
           if (doImport) {
-            if (isMeshFile(finalPath)) {
+            if (editor::workflow::IsMeshFile(finalPath)) {
               resourceBrowserState.activeMeshPath = finalPath;
-            } else if (isSpriteMetaFile(finalPath)) {
+            } else if (editor::workflow::IsSpriteMetaFile(finalPath)) {
               resourceBrowserState.activeSpriteMetaPath = finalPath;
-            } else if (isMaterialFile(finalPath)) {
+            } else if (editor::workflow::IsMaterialFile(finalPath)) {
               resourceBrowserState.activeMaterialPath = finalPath;
             }
             popupOpen = false;
@@ -814,7 +458,11 @@ namespace lve {
         importOptions.show = false;
       }
     }
+  }
 
+  bool EditorSystem::applyHistoryActions(
+    EditorFrameResult &result,
+    SceneSystem &sceneSystem) {
     auto &history = getHistory();
     bool historyTriggered = false;
     if (result.undoRequested) {
@@ -834,85 +482,97 @@ namespace lve {
         history.push({
           "Transform",
           [&, selectedId, before]() {
-            auto it = gameObjectManager.gameObjects.find(selectedId);
-            if (it == gameObjectManager.gameObjects.end()) return;
-            it->second.transform.translation = before.translation;
-            it->second.transform.rotation = before.rotation;
-            it->second.transform.scale = before.scale;
-            it->second.transformDirty = true;
+            auto *obj = sceneSystem.findObject(selectedId);
+            if (!obj) return;
+            obj->transform.translation = before.translation;
+            obj->transform.rotation = before.rotation;
+            obj->transform.scale = before.scale;
+            obj->transformDirty = true;
           },
           [&, selectedId, after]() {
-            auto it = gameObjectManager.gameObjects.find(selectedId);
-            if (it == gameObjectManager.gameObjects.end()) return;
-            it->second.transform.translation = after.translation;
-            it->second.transform.rotation = after.rotation;
-            it->second.transform.scale = after.scale;
-            it->second.transformDirty = true;
+            auto *obj = sceneSystem.findObject(selectedId);
+            if (!obj) return;
+            obj->transform.translation = after.translation;
+            obj->transform.rotation = after.rotation;
+            obj->transform.scale = after.scale;
+            obj->transformDirty = true;
           }});
       }
-        if (result.inspectorActions.nameChanged) {
-          const std::string beforeName = result.inspectorActions.beforeName;
-          const std::string afterName = result.inspectorActions.afterName;
-          history.push({
-            "Rename",
+      if (result.inspectorActions.nameChanged) {
+        const std::string beforeName = result.inspectorActions.beforeName;
+        const std::string afterName = result.inspectorActions.afterName;
+        history.push({
+          "Rename",
           [&, selectedId, beforeName]() {
-            auto it = gameObjectManager.gameObjects.find(selectedId);
-            if (it == gameObjectManager.gameObjects.end()) return;
-            it->second.name = beforeName;
+            auto *obj = sceneSystem.findObject(selectedId);
+            if (!obj) return;
+            obj->name = beforeName;
           },
           [&, selectedId, afterName]() {
-              auto it = gameObjectManager.gameObjects.find(selectedId);
-              if (it == gameObjectManager.gameObjects.end()) return;
-              it->second.name = afterName;
-            }});
-        }
-        if (result.inspectorActions.nodeOverridesChanged &&
-            result.inspectorActions.nodeOverridesCommitted) {
-          const auto before = result.inspectorActions.beforeNodeOverrides;
-          const auto after = result.inspectorActions.afterNodeOverrides;
-          history.push({
-            "Node Override",
-            [&, selectedId, before]() {
-              auto it = gameObjectManager.gameObjects.find(selectedId);
-              if (it == gameObjectManager.gameObjects.end()) return;
-              if (!it->second.model) return;
-              sceneSystem.ensureNodeOverrides(it->second);
-              auto &target = it->second.nodeOverrides;
-              for (auto &override : target) {
-                override.enabled = false;
-                override.transform = TransformComponent{};
-              }
-              const std::size_t count = std::min(target.size(), before.size());
-              for (std::size_t i = 0; i < count; ++i) {
-                target[i] = before[i];
-              }
-            },
-            [&, selectedId, after]() {
-              auto it = gameObjectManager.gameObjects.find(selectedId);
-              if (it == gameObjectManager.gameObjects.end()) return;
-              if (!it->second.model) return;
-              sceneSystem.ensureNodeOverrides(it->second);
-              auto &target = it->second.nodeOverrides;
-              for (auto &override : target) {
-                override.enabled = false;
-                override.transform = TransformComponent{};
-              }
-              const std::size_t count = std::min(target.size(), after.size());
-              for (std::size_t i = 0; i < count; ++i) {
-                target[i] = after[i];
-              }
-            }});
-        }
+            auto *obj = sceneSystem.findObject(selectedId);
+            if (!obj) return;
+            obj->name = afterName;
+          }});
       }
+      if (result.inspectorActions.nodeOverridesChanged &&
+          result.inspectorActions.nodeOverridesCommitted) {
+        const auto before = result.inspectorActions.beforeNodeOverrides;
+        const auto after = result.inspectorActions.afterNodeOverrides;
+        history.push({
+          "Node Override",
+          [&, selectedId, before]() {
+            auto *obj = sceneSystem.findObject(selectedId);
+            if (!obj || !obj->model) return;
+            sceneSystem.ensureNodeOverrides(*obj);
+            auto &target = obj->nodeOverrides;
+            for (auto &override : target) {
+              override.enabled = false;
+              override.transform = TransformComponent{};
+            }
+            const std::size_t count = std::min(target.size(), before.size());
+            for (std::size_t i = 0; i < count; ++i) {
+              target[i] = before[i];
+            }
+          },
+          [&, selectedId, after]() {
+            auto *obj = sceneSystem.findObject(selectedId);
+            if (!obj || !obj->model) return;
+            sceneSystem.ensureNodeOverrides(*obj);
+            auto &target = obj->nodeOverrides;
+            for (auto &override : target) {
+              override.enabled = false;
+              override.transform = TransformComponent{};
+            }
+            const std::size_t count = std::min(target.size(), after.size());
+            for (std::size_t i = 0; i < count; ++i) {
+              target[i] = after[i];
+            }
+          }});
+      }
+    }
 
+    return historyTriggered;
+  }
+
+  void EditorSystem::applyResourceActions(
+    EditorFrameResult &result,
+    SceneSystem &sceneSystem,
+    SpriteAnimator *&animator,
+    editor::ResourceBrowserState &resourceBrowserState) {
     if (result.resourceActions.setActiveSpriteMeta) {
       if (sceneSystem.setActiveSpriteMetadata(resourceBrowserState.activeSpriteMetaPath)) {
         animator = sceneSystem.getSpriteAnimator();
       }
     }
 
+    if (result.resourceActions.setActiveMesh &&
+        !resourceBrowserState.activeMeshPath.empty()) {
+      sceneSystem.setActiveMeshPath(resourceBrowserState.activeMeshPath);
+    }
+
     if (result.resourceActions.setActiveMaterial &&
         !resourceBrowserState.activeMaterialPath.empty()) {
+      sceneSystem.setActiveMaterialPath(resourceBrowserState.activeMaterialPath);
       sceneSystem.loadMaterialCached(resourceBrowserState.activeMaterialPath);
     }
 
@@ -922,7 +582,12 @@ namespace lve {
       if (sceneSystem.setActiveSpriteMetadata(resourceBrowserState.activeSpriteMetaPath)) {
         result.selectedObject->spriteMetaPath = resourceBrowserState.activeSpriteMetaPath;
         if (animator) {
-          animator->applySpriteState(*result.selectedObject, result.selectedObject->objState);
+          const std::string &stateName = result.selectedObject->spriteStateName;
+          if (!stateName.empty()) {
+            animator->applySpriteState(*result.selectedObject, stateName);
+          } else {
+            animator->applySpriteState(*result.selectedObject, result.selectedObject->objState);
+          }
         }
         animator = sceneSystem.getSpriteAnimator();
       }
@@ -958,7 +623,13 @@ namespace lve {
         std::cerr << "Failed to apply material " << resourceBrowserState.activeMaterialPath << "\n";
       }
     }
+  }
 
+  void EditorSystem::applyInspectorActions(
+    EditorFrameResult &result,
+    SceneSystem &sceneSystem,
+    SpriteAnimator *&animator,
+    editor::ResourceBrowserState &resourceBrowserState) {
     if (result.inspectorActions.materialPreviewRequested &&
         result.selectedObject &&
         result.selectedObject->model) {
@@ -1028,9 +699,16 @@ namespace lve {
         }
       }
     }
+    (void)animator;
+  }
 
+  void EditorSystem::handlePicking(
+    EditorFrameResult &result,
+    const std::vector<LveGameObject*> &objects,
+    const glm::mat4 &view,
+    const glm::mat4 &projection) {
     if (result.sceneView.leftMouseClicked && result.sceneView.allowPick) {
-      const Ray ray = buildPickRay(result.sceneView, view, projection);
+      const editor::tools::Ray ray = editor::tools::BuildPickRay(result.sceneView, view, projection);
       if (ray.valid) {
         float bestT = std::numeric_limits<float>::max();
         std::optional<LveGameObject::id_t> hitId{};
@@ -1039,25 +717,25 @@ namespace lve {
         const glm::vec3 camRight = glm::vec3(invView[0]);
         const glm::vec3 camUp = glm::vec3(invView[1]);
 
-        for (auto &kv : gameObjectManager.gameObjects) {
-          auto &obj = kv.second;
-          if (!obj.model && !obj.pointLight && !obj.isSprite) continue;
+        for (auto *obj : objects) {
+          if (!obj) continue;
+          if (!obj->model && !obj->pointLight && !obj->isSprite) continue;
           float tHitWorld = std::numeric_limits<float>::max();
           bool hit = false;
-          if (obj.pointLight) {
+          if (obj->pointLight) {
             float tHit = 0.f;
-            if (intersectSphere(ray, obj.transform.translation, obj.transform.scale.x, tHit)) {
+            if (editor::tools::IntersectSphere(ray, obj->transform.translation, obj->transform.scale.x, tHit)) {
               tHitWorld = tHit;
               hit = true;
             }
-          } else if (obj.isSprite) {
+          } else if (obj->isSprite) {
             float tHit = 0.f;
             glm::vec2 halfSize{
-              std::abs(obj.transform.scale.x) * 0.5f,
-              std::abs(obj.transform.scale.y) * 0.5f};
-            if (intersectBillboardQuad(
+              std::abs(obj->transform.scale.x) * 0.5f,
+              std::abs(obj->transform.scale.y) * 0.5f};
+            if (editor::tools::IntersectBillboardQuad(
                   ray,
-                  obj.transform.translation,
+                  obj->transform.translation,
                   camRight,
                   camUp,
                   halfSize,
@@ -1065,23 +743,23 @@ namespace lve {
               tHitWorld = tHit - 0.01f; // slight bias toward sprites
               hit = true;
             }
-          } else if (obj.model) {
-            const auto &nodes = obj.model->getNodes();
-            const auto &subMeshes = obj.model->getSubMeshes();
+          } else if (obj->model) {
+            const auto &nodes = obj->model->getNodes();
+            const auto &subMeshes = obj->model->getSubMeshes();
             if (!nodes.empty() && !subMeshes.empty()) {
               std::vector<glm::mat4> localOverrides(nodes.size(), glm::mat4(1.f));
-              if (obj.nodeOverrides.size() == nodes.size()) {
+              if (obj->nodeOverrides.size() == nodes.size()) {
                 for (std::size_t i = 0; i < nodes.size(); ++i) {
-                  const auto &override = obj.nodeOverrides[i];
+                  const auto &override = obj->nodeOverrides[i];
                   if (override.enabled) {
                     localOverrides[i] = override.transform.mat4();
                   }
                 }
               }
               std::vector<glm::mat4> nodeGlobals;
-              obj.model->computeNodeGlobals(localOverrides, nodeGlobals);
+              obj->model->computeNodeGlobals(localOverrides, nodeGlobals);
 
-              const glm::mat4 objectTransform = obj.transform.mat4();
+              const glm::mat4 objectTransform = obj->transform.mat4();
               for (std::size_t nodeIndex = 0; nodeIndex < nodes.size(); ++nodeIndex) {
                 const auto &node = nodes[nodeIndex];
                 if (node.meshes.empty()) continue;
@@ -1098,7 +776,7 @@ namespace lve {
                   if (!subMesh.hasBounds) continue;
                   glm::vec3 worldMin;
                   glm::vec3 worldMax;
-                  transformAabb(nodeTransform, subMesh.boundsMin, subMesh.boundsMax, worldMin, worldMax);
+                  editor::tools::TransformAabb(nodeTransform, subMesh.boundsMin, subMesh.boundsMax, worldMin, worldMax);
                   if (!hasNodeBounds) {
                     nodeMin = worldMin;
                     nodeMax = worldMax;
@@ -1111,24 +789,24 @@ namespace lve {
 
                 if (!hasNodeBounds) continue;
                 float tHit = 0.f;
-                if (intersectAabbLocal(ray.origin, ray.direction, nodeMin, nodeMax, tHit)) {
+                if (editor::tools::IntersectAabbLocal(ray.origin, ray.direction, nodeMin, nodeMax, tHit)) {
                   tHitWorld = tHit;
                   hit = true;
                   if (tHitWorld < bestT) {
                     bestT = tHitWorld;
-                    hitId = obj.getId();
+                    hitId = obj->getId();
                     hitNodeIndex = static_cast<int>(nodeIndex);
                   }
                 }
               }
             } else {
-              const auto &bbox = obj.model->getBoundingBox();
-              glm::mat4 modelMat = obj.transform.mat4();
+              const auto &bbox = obj->model->getBoundingBox();
+              glm::mat4 modelMat = obj->transform.mat4();
               glm::mat4 invModel = glm::inverse(modelMat);
               glm::vec3 localOrigin = glm::vec3(invModel * glm::vec4(ray.origin, 1.f));
               glm::vec3 localDir = glm::normalize(glm::mat3(invModel) * ray.direction);
               float tLocal = 0.f;
-              if (intersectAabbLocal(localOrigin, localDir, bbox.min, bbox.max, tLocal)) {
+              if (editor::tools::IntersectAabbLocal(localOrigin, localDir, bbox.min, bbox.max, tLocal)) {
                 glm::vec3 hitLocal = localOrigin + localDir * tLocal;
                 glm::vec3 hitWorld = glm::vec3(modelMat * glm::vec4(hitLocal, 1.f));
                 tHitWorld = glm::length(hitWorld - ray.origin);
@@ -1139,7 +817,7 @@ namespace lve {
 
           if (hit && tHitWorld < bestT) {
             bestT = tHitWorld;
-            hitId = obj.getId();
+            hitId = obj->getId();
           }
         }
         if (hitId) {
@@ -1150,7 +828,17 @@ namespace lve {
         }
       }
     }
+  }
 
+  void EditorSystem::handleCreateDelete(
+    EditorFrameResult &result,
+    SceneSystem &sceneSystem,
+    SpriteAnimator *&animator,
+    const glm::mat4 &view,
+    const glm::vec3 &cameraPos,
+    editor::ResourceBrowserState &resourceBrowserState,
+    LveGameObject::id_t protectedId,
+    bool historyTriggered) {
     glm::vec3 spawnForward{0.f, 0.f, 1.f};
     glm::vec3 spawnOrigin = cameraPos;
     {
@@ -1175,14 +863,14 @@ namespace lve {
         setSelectedId(obj.getId());
         obj.transformDirty = true;
         if (!historyTriggered) {
-          const GameObjectSnapshot snapshot = captureSnapshot(obj);
+          const editor::GameObjectSnapshot snapshot = editor::CaptureSnapshot(obj);
           history.push({
             "Create Sprite",
             [&, id = obj.getId()]() {
-              gameObjectManager.destroyGameObject(id);
+              sceneSystem.destroyObject(id);
             },
             [&, snapshot]() {
-              restoreSnapshot(sceneSystem, animator, snapshot);
+              editor::RestoreSnapshot(sceneSystem, animator, snapshot);
               setSelectedId(snapshot.id);
             }});
         }
@@ -1199,7 +887,7 @@ namespace lve {
             ? "Assets"
             : resourceBrowserState.browser.rootPath;
           const std::string sourceMaterial = resourceBrowserState.activeMaterialPath;
-          if (createMaterialInstance(
+          if (editor::workflow::CreateMaterialInstance(
                 sceneSystem,
                 sourceMaterial,
                 obj.model.get(),
@@ -1220,14 +908,14 @@ namespace lve {
           }
         }
         if (!historyTriggered) {
-          const GameObjectSnapshot snapshot = captureSnapshot(obj);
+          const editor::GameObjectSnapshot snapshot = editor::CaptureSnapshot(obj);
           history.push({
             "Create Mesh",
             [&, id = obj.getId()]() {
-              gameObjectManager.destroyGameObject(id);
+              sceneSystem.destroyObject(id);
             },
             [&, snapshot]() {
-              restoreSnapshot(sceneSystem, animator, snapshot);
+              editor::RestoreSnapshot(sceneSystem, animator, snapshot);
               setSelectedId(snapshot.id);
             }});
         }
@@ -1238,14 +926,14 @@ namespace lve {
         setSelectedId(obj.getId());
         obj.transformDirty = true;
         if (!historyTriggered) {
-          const GameObjectSnapshot snapshot = captureSnapshot(obj);
+          const editor::GameObjectSnapshot snapshot = editor::CaptureSnapshot(obj);
           history.push({
             "Create Light",
             [&, id = obj.getId()]() {
-              gameObjectManager.destroyGameObject(id);
+              sceneSystem.destroyObject(id);
             },
             [&, snapshot]() {
-              restoreSnapshot(sceneSystem, animator, snapshot);
+              editor::RestoreSnapshot(sceneSystem, animator, snapshot);
               setSelectedId(snapshot.id);
             }});
         }
@@ -1258,31 +946,37 @@ namespace lve {
     if (result.hierarchyActions.deleteSelected) {
       auto selectedId = getSelectedId();
       if (selectedId && *selectedId != protectedId) {
-        GameObjectSnapshot snapshot{};
+        editor::GameObjectSnapshot snapshot{};
         bool hasSnapshot = false;
-        auto it = gameObjectManager.gameObjects.find(*selectedId);
-        if (it != gameObjectManager.gameObjects.end()) {
-          snapshot = captureSnapshot(it->second);
+        auto *obj = sceneSystem.findObject(*selectedId);
+        if (obj) {
+          snapshot = editor::CaptureSnapshot(*obj);
           hasSnapshot = true;
         }
-        if (gameObjectManager.destroyGameObject(*selectedId)) {
+        if (sceneSystem.destroyObject(*selectedId)) {
           setSelectedId(std::nullopt);
           if (!historyTriggered && hasSnapshot) {
             history.push({
               "Delete Object",
               [&, snapshot]() {
-                restoreSnapshot(sceneSystem, animator, snapshot);
+                editor::RestoreSnapshot(sceneSystem, animator, snapshot);
                 setSelectedId(snapshot.id);
               },
               [&, id = *selectedId]() {
-                gameObjectManager.destroyGameObject(id);
+                sceneSystem.destroyObject(id);
                 setSelectedId(std::nullopt);
               }});
           }
         }
       }
     }
+  }
 
+  void EditorSystem::handleSceneActions(
+    EditorFrameResult &result,
+    SceneSystem &sceneSystem,
+    SpriteAnimator *&animator,
+    LveGameObject::id_t viewerId) {
     if (result.sceneActions.saveRequested) {
       sceneSystem.saveSceneToFile(getScenePanelState().path);
     }
@@ -1290,9 +984,9 @@ namespace lve {
       vkDeviceWaitIdle(device.device());
       sceneSystem.loadSceneFromFile(getScenePanelState().path, viewerId);
       animator = sceneSystem.getSpriteAnimator();
+      history.clear();
+      setSelectedId(std::nullopt);
     }
-
-    return result;
   }
 
   void EditorSystem::render(VkCommandBuffer commandBuffer) {

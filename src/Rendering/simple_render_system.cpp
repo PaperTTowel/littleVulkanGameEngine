@@ -107,8 +107,9 @@ namespace lve {
       0,
       nullptr);
 
-    for (auto &kv : frameInfo.gameObjects) {
-      auto &obj = kv.second;
+    for (auto *objPtr : frameInfo.gameObjects) {
+      if (!objPtr) continue;
+      auto &obj = *objPtr;
       if (obj.isSprite) continue;
       if (obj.model == nullptr) continue;
 

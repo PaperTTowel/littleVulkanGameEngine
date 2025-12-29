@@ -26,6 +26,85 @@ namespace lve {
       gameObjectManager{device},
       assetDatabase{"Assets"} {}
 
+  void SceneSystem::setAssetDefaults(const AssetDefaults &defaults) {
+    assetDefaults = defaults;
+    if (assetDefaults.rootPath.empty()) {
+      assetDefaults.rootPath = "Assets";
+    }
+    if (assetDefaults.activeMeshPath.empty()) {
+      assetDefaults.activeMeshPath = "Assets/models/colored_cube.obj";
+    }
+    if (assetDefaults.activeSpriteMetaPath.empty()) {
+      assetDefaults.activeSpriteMetaPath = "Assets/textures/characters/player.json";
+    }
+    assetDatabase.setRootPath(assetDefaults.rootPath);
+  }
+
+  void SceneSystem::setAssetRootPath(const std::string &rootPath) {
+    assetDefaults.rootPath = rootPath.empty() ? "Assets" : rootPath;
+    assetDatabase.setRootPath(assetDefaults.rootPath);
+  }
+
+  void SceneSystem::setActiveMeshPath(const std::string &path) {
+    assetDefaults.activeMeshPath = path.empty() ? "Assets/models/colored_cube.obj" : path;
+  }
+
+  void SceneSystem::setActiveMaterialPath(const std::string &path) {
+    assetDefaults.activeMaterialPath = path;
+  }
+
+  LveGameObject &SceneSystem::createEmptyObject() {
+    return gameObjectManager.createGameObject();
+  }
+
+  LveGameObject *SceneSystem::findObject(LveGameObject::id_t id) {
+    auto it = gameObjectManager.gameObjects.find(id);
+    if (it == gameObjectManager.gameObjects.end()) return nullptr;
+    return &it->second;
+  }
+
+  const LveGameObject *SceneSystem::findObject(LveGameObject::id_t id) const {
+    auto it = gameObjectManager.gameObjects.find(id);
+    if (it == gameObjectManager.gameObjects.end()) return nullptr;
+    return &it->second;
+  }
+
+  bool SceneSystem::destroyObject(LveGameObject::id_t id) {
+    return gameObjectManager.destroyGameObject(id);
+  }
+
+  void SceneSystem::collectObjects(std::vector<LveGameObject*> &out) {
+    out.clear();
+    out.reserve(gameObjectManager.gameObjects.size());
+    for (auto &kv : gameObjectManager.gameObjects) {
+      out.push_back(&kv.second);
+    }
+  }
+
+  void SceneSystem::collectObjects(std::vector<const LveGameObject*> &out) const {
+    out.clear();
+    out.reserve(gameObjectManager.gameObjects.size());
+    for (const auto &kv : gameObjectManager.gameObjects) {
+      out.push_back(&kv.second);
+    }
+  }
+
+  void SceneSystem::updateBuffers(int frameIndex) {
+    gameObjectManager.updateBuffer(frameIndex);
+  }
+
+  void SceneSystem::resetDescriptorCaches() {
+    gameObjectManager.resetDescriptorCaches();
+  }
+
+  void SceneSystem::updateAnimationFrame(
+    LveGameObject &obj,
+    int maxFrames,
+    float frameTime,
+    float animationSpeed) {
+    gameObjectManager.updateFrame(obj, maxFrames, frameTime, animationSpeed);
+  }
+
   ObjectState SceneSystem::objectStateFromString(const std::string &name) {
     if (name == "walking" || name == "walk") return ObjectState::WALKING;
     return ObjectState::IDLE;
@@ -176,20 +255,27 @@ namespace lve {
       return false;
     }
     playerMeta = meta;
-    resourceBrowserState.activeSpriteMetaPath = assetPath;
+    assetDefaults.activeSpriteMetaPath = assetPath;
     spriteAnimator = std::make_unique<SpriteAnimator>(lveDevice, playerMeta);
 
     for (auto &kv : gameObjectManager.gameObjects) {
       auto &obj = kv.second;
       if (!obj.isSprite) continue;
       obj.spriteMetaPath = assetPath;
-      spriteAnimator->applySpriteState(obj, obj.objState);
+      if (!obj.spriteStateName.empty()) {
+        spriteAnimator->applySpriteState(obj, obj.spriteStateName);
+      } else {
+        spriteAnimator->applySpriteState(obj, obj.objState);
+      }
     }
     return true;
   }
 
   LveGameObject &SceneSystem::createMeshObject(const glm::vec3 &position, const std::string &modelPath) {
-    const std::string pathToUse = modelPath.empty() ? "Assets/models/colored_cube.obj" : modelPath;
+    const std::string fallbackPath = assetDefaults.activeMeshPath.empty()
+      ? "Assets/models/colored_cube.obj"
+      : assetDefaults.activeMeshPath;
+    const std::string pathToUse = modelPath.empty() ? fallbackPath : modelPath;
     auto model = loadModelCached(pathToUse);
     auto &obj = gameObjectManager.createGameObject();
     obj.model = model;
@@ -238,7 +324,10 @@ namespace lve {
     LveGameObject::id_t id,
     const glm::vec3 &position,
     const std::string &modelPath) {
-    const std::string pathToUse = modelPath.empty() ? "Assets/models/colored_cube.obj" : modelPath;
+    const std::string fallbackPath = assetDefaults.activeMeshPath.empty()
+      ? "Assets/models/colored_cube.obj"
+      : assetDefaults.activeMeshPath;
+    const std::string pathToUse = modelPath.empty() ? fallbackPath : modelPath;
     auto model = loadModelCached(pathToUse);
     auto &obj = gameObjectManager.createGameObjectWithId(id);
     obj.model = model;
@@ -381,9 +470,9 @@ namespace lve {
     };
 
     // reload sprite metadata if provided by first sprite entity
-    std::string metaPath = resourceBrowserState.activeSpriteMetaPath.empty()
+    std::string metaPath = assetDefaults.activeSpriteMetaPath.empty()
       ? "Assets/textures/characters/player.json"
-      : resourceBrowserState.activeSpriteMetaPath;
+      : assetDefaults.activeSpriteMetaPath;
     for (const auto &e : scene.entities) {
       if (e.sprite) {
         const std::string assetPath = resolveAssetPath(e.sprite->spriteMetaGuid, e.sprite->spriteMeta);
@@ -426,6 +515,12 @@ namespace lve {
         obj.name = !e.name.empty() ? e.name : "Sprite " + std::to_string(obj.getId());
         obj.billboardMode = (e.sprite->billboard == BillboardKind::Spherical) ? BillboardMode::Spherical
           : (e.sprite->billboard == BillboardKind::Cylindrical ? BillboardMode::Cylindrical : BillboardMode::None);
+        if (!e.sprite->state.empty()) {
+          obj.spriteStateName = e.sprite->state;
+          if (spriteAnimator) {
+            spriteAnimator->applySpriteState(obj, obj.spriteStateName);
+          }
+        }
         obj.transformDirty = true;
         if (!characterAssigned) {
           characterId = obj.getId();
@@ -473,20 +568,24 @@ namespace lve {
   }
 
   void SceneSystem::loadGameObjects() {
-    assetDatabase.setRootPath(resourceBrowserState.browser.rootPath);
+    if (assetDefaults.rootPath.empty()) {
+      assetDefaults.rootPath = "Assets";
+    }
+    if (assetDefaults.activeMeshPath.empty()) {
+      assetDefaults.activeMeshPath = "Assets/models/colored_cube.obj";
+    }
+    if (assetDefaults.activeSpriteMetaPath.empty()) {
+      assetDefaults.activeSpriteMetaPath = "Assets/textures/characters/player.json";
+    }
+    assetDatabase.setRootPath(assetDefaults.rootPath);
     assetDatabase.initialize();
 
-    resourceBrowserState.browser.pendingRefresh = true;
-    resourceBrowserState.activeMeshPath = "Assets/models/colored_cube.obj";
-    resourceBrowserState.activeSpriteMetaPath = "Assets/textures/characters/player.json";
-    resourceBrowserState.activeMaterialPath.clear();
-
-    cubeModel = loadModelCached(resourceBrowserState.activeMeshPath);
+    cubeModel = loadModelCached(assetDefaults.activeMeshPath);
     spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");
 
-    createMeshObject({-.5f, .5f, 0.f}, resourceBrowserState.activeMeshPath);
+    createMeshObject({-.5f, .5f, 0.f}, assetDefaults.activeMeshPath);
 
-    const std::string defaultMetaPath = resourceBrowserState.activeSpriteMetaPath;
+    const std::string defaultMetaPath = assetDefaults.activeSpriteMetaPath;
     if (!loadSpriteMetadata(defaultMetaPath, playerMeta)) {
       std::cerr << "Failed to load player sprite metadata; using defaults\n";
       playerMeta.atlasCols = 6;
@@ -501,7 +600,7 @@ namespace lve {
     }
     spriteAnimator = std::make_unique<SpriteAnimator>(lveDevice, playerMeta);
 
-    auto &characterObj = createSpriteObject({0.f, 0.f, 0.f}, ObjectState::IDLE, resourceBrowserState.activeSpriteMetaPath);
+    auto &characterObj = createSpriteObject({0.f, 0.f, 0.f}, ObjectState::IDLE, assetDefaults.activeSpriteMetaPath);
     characterId = characterObj.getId();
 
     std::vector<glm::vec3> lightColors{

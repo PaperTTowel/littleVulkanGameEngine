@@ -186,7 +186,11 @@ namespace lve {
     return gameViewTarget.extent;
   }
 
-  FrameInfo RenderContext::makeFrameInfo(float frameTime, LveCamera &camera, LveGameObject::Map &gameObjects, VkCommandBuffer commandBuffer) {
+  FrameInfo RenderContext::makeFrameInfo(
+    float frameTime,
+    LveCamera &camera,
+    std::vector<LveGameObject*> &gameObjects,
+    VkCommandBuffer commandBuffer) {
     int frameIndex = lveRenderer.getFrameindex();
     return FrameInfo{
       frameIndex,

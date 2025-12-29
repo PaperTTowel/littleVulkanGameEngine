@@ -68,10 +68,19 @@ namespace lve::editor {
         ImGui::TreePop();
       }
     }
+
+    LveGameObject *findObjectById(const std::vector<LveGameObject*> &objects, LveGameObject::id_t id) {
+      for (auto *obj : objects) {
+        if (obj && obj->getId() == id) {
+          return obj;
+        }
+      }
+      return nullptr;
+    }
   } // namespace
 
   HierarchyActions BuildHierarchyPanel(
-    LveGameObjectManager &manager,
+    const std::vector<LveGameObject*> &objects,
     HierarchyPanelState &state,
     LveGameObject::id_t protectedId,
     bool *open) {
@@ -88,12 +97,12 @@ namespace lve::editor {
 
     // ensure selected id is still valid
     if (state.selectedId.has_value()) {
-      auto itSel = manager.gameObjects.find(*state.selectedId);
-      if (itSel == manager.gameObjects.end()) {
+      auto *selectedObj = findObjectById(objects, *state.selectedId);
+      if (!selectedObj) {
         state.selectedId.reset();
         state.selectedNodeIndex = -1;
       } else {
-        const auto &obj = itSel->second;
+        const auto &obj = *selectedObj;
         if (!obj.model || obj.model->getNodes().empty()) {
           state.selectedNodeIndex = -1;
         } else if (state.selectedNodeIndex >= static_cast<int>(obj.model->getNodes().size())) {
@@ -104,18 +113,19 @@ namespace lve::editor {
       state.selectedNodeIndex = -1;
     }
 
-    std::vector<std::pair<LveGameObject::id_t, LveGameObject*>> sortedObjects;
-    sortedObjects.reserve(manager.gameObjects.size());
-    for (auto &kv : manager.gameObjects) {
-      sortedObjects.emplace_back(kv.first, &kv.second);
+    std::vector<LveGameObject*> sortedObjects;
+    sortedObjects.reserve(objects.size());
+    for (auto *obj : objects) {
+      if (obj) {
+        sortedObjects.push_back(obj);
+      }
     }
     std::sort(
       sortedObjects.begin(),
       sortedObjects.end(),
-      [](auto &a, auto &b) { return a.first < b.first; });
+      [](const auto *a, const auto *b) { return a->getId() < b->getId(); });
 
-    for (auto &entry : sortedObjects) {
-      auto *obj = entry.second;
+    for (auto *obj : sortedObjects) {
       const std::string label = makeLabel(*obj);
       const bool hasNodes = obj->model && !obj->model->getNodes().empty();
       const bool objectSelected =
@@ -179,7 +189,7 @@ namespace lve::editor {
 
     const bool canDelete =
       state.selectedId.has_value() &&
-      manager.gameObjects.count(*state.selectedId) &&
+      findObjectById(objects, *state.selectedId) != nullptr &&
       *state.selectedId != protectedId;
 
     ImGui::BeginDisabled(!canDelete);

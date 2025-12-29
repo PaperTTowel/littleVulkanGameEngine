@@ -34,6 +34,7 @@ namespace lve {
     bool wireframeEnabled{false};
     bool normalViewEnabled{false};
     EditorSystem editorSystem{lveWindow, lveDevice};
+    editor::ResourceBrowserState resourceBrowserState{};
     SceneSystem sceneSystem{lveDevice};
   };
 } // namespace lve

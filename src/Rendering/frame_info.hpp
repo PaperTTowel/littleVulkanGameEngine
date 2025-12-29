@@ -6,6 +6,7 @@
 
 // lib
 #include <vulkan/vulkan.h>
+#include <vector>
 
 namespace lve{
 
@@ -32,6 +33,6 @@ namespace lve{
         LveCamera &camera;
         VkDescriptorSet globalDescriptorSet;
         LveDescriptorPool &frameDescriptorPool;  // pool for cached per-object descriptors
-        LveGameObject::Map &gameObjects;
+        std::vector<LveGameObject*> &gameObjects;
     };
 } // namespace lve

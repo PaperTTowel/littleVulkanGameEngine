@@ -38,7 +38,7 @@ namespace lve {
     VkExtent2D getSceneViewExtent() const;
     VkExtent2D getGameViewExtent() const;
 
-    FrameInfo makeFrameInfo(float frameTime, LveCamera &camera, LveGameObject::Map &gameObjects, VkCommandBuffer commandBuffer);
+    FrameInfo makeFrameInfo(float frameTime, LveCamera &camera, std::vector<LveGameObject*> &gameObjects, VkCommandBuffer commandBuffer);
     void updateGlobalUbo(int frameIndex, const GlobalUbo &ubo);
 
     SimpleRenderSystem &simpleSystem() { return *simpleRenderSystem; }

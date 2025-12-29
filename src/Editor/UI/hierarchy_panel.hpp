@@ -3,6 +3,7 @@
 #include "utils/game_object.hpp"
 
 #include <optional>
+#include <vector>
 
 namespace lve::editor {
 
@@ -19,7 +20,7 @@ namespace lve::editor {
   };
 
   HierarchyActions BuildHierarchyPanel(
-    LveGameObjectManager &manager,
+    const std::vector<LveGameObject*> &objects,
     HierarchyPanelState &state,
     LveGameObject::id_t protectedId,
     bool *open);

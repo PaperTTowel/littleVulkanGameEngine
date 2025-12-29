@@ -2,8 +2,8 @@
 
 #include "Backend/device.hpp"
 #include "Engine/asset_database.hpp"
+#include "Engine/asset_defaults.hpp"
 #include "Engine/scene.hpp"
-#include "Editor/Workflow/resource_browser_panel.hpp"
 #include "Rendering/material.hpp"
 #include "utils/game_object.hpp"
 #include "utils/sprite_animator.hpp"
@@ -14,17 +14,28 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace lve {
   class SceneSystem {
   public:
     explicit SceneSystem(LveDevice &device);
 
-    LveGameObjectManager &getGameObjectManager() { return gameObjectManager; }
-    const LveGameObjectManager &getGameObjectManager() const { return gameObjectManager; }
+    LveGameObject &createEmptyObject();
+    LveGameObject *findObject(LveGameObject::id_t id);
+    const LveGameObject *findObject(LveGameObject::id_t id) const;
+    bool destroyObject(LveGameObject::id_t id);
+    void collectObjects(std::vector<LveGameObject*> &out);
+    void collectObjects(std::vector<const LveGameObject*> &out) const;
+    void updateBuffers(int frameIndex);
+    void resetDescriptorCaches();
+    void updateAnimationFrame(LveGameObject &obj, int maxFrames, float frameTime, float animationSpeed);
 
-    editor::ResourceBrowserState &getResourceBrowserState() { return resourceBrowserState; }
-    const editor::ResourceBrowserState &getResourceBrowserState() const { return resourceBrowserState; }
+    const AssetDefaults &getAssetDefaults() const { return assetDefaults; }
+    void setAssetDefaults(const AssetDefaults &defaults);
+    void setAssetRootPath(const std::string &rootPath);
+    void setActiveMeshPath(const std::string &path);
+    void setActiveMaterialPath(const std::string &path);
 
     AssetDatabase &getAssetDatabase() { return assetDatabase; }
     const AssetDatabase &getAssetDatabase() const { return assetDatabase; }
@@ -79,7 +90,7 @@ namespace lve {
 
     LveDevice &lveDevice;
     LveGameObjectManager gameObjectManager;
-    editor::ResourceBrowserState resourceBrowserState;
+    AssetDefaults assetDefaults;
     AssetDatabase assetDatabase;
     SpriteMetadata playerMeta;
     std::unique_ptr<SpriteAnimator> spriteAnimator;

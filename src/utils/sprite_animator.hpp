@@ -15,7 +15,8 @@ namespace lve {
   public:
     explicit SpriteAnimator(LveDevice &device, SpriteMetadata meta);
 
-    void applySpriteState(LveGameObject &character, ObjectState desiredState);
+    bool applySpriteState(LveGameObject &character, const std::string &stateName);
+    bool applySpriteState(LveGameObject &character, ObjectState desiredState);
     const std::string &getCurrentTexturePath() const { return currentTexturePath; }
     const SpriteMetadata &getMetadata() const { return metadata; }
 
@@ -25,7 +26,6 @@ namespace lve {
     LveDevice &device;
     SpriteMetadata metadata;
     std::unordered_map<std::string, std::shared_ptr<LveTexture>> textureCache;
-    ObjectState currentState{ObjectState::IDLE};
     std::string currentTexturePath;
   };
 

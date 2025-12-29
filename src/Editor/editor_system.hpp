@@ -6,29 +6,15 @@
 #include "Editor/Workflow/resource_browser_panel.hpp"
 #include "Editor/UI/inspector_panel.hpp"
 #include "Editor/History/editor_history.hpp"
+#include "Editor/viewport_info.hpp"
 
 // std
 #include <optional>
+#include <vector>
 
 namespace lve {
   class LveDevice;
   class SceneSystem;
-
-  struct ViewportInfo {
-    float x{0.f};
-    float y{0.f};
-    uint32_t width{0};
-    uint32_t height{0};
-    bool visible{false};
-    bool hovered{false};
-    bool rightMouseDown{false};
-    bool leftMouseClicked{false};
-    bool allowPick{false};
-    float mouseDeltaX{0.f};
-    float mouseDeltaY{0.f};
-    float mousePosX{0.f};
-    float mousePosY{0.f};
-  };
 
   struct EditorFrameResult {
     editor::HierarchyActions hierarchyActions{};
@@ -59,7 +45,6 @@ namespace lve {
       bool &normalViewEnabled,
       bool &useOrthoCamera,
       SceneSystem &sceneSystem,
-      LveGameObjectManager &gameObjectManager,
       LveGameObject::id_t protectedId,
       LveGameObject::id_t viewerId,
       SpriteAnimator *&animator,
@@ -102,6 +87,7 @@ namespace lve {
     LveDevice &device;
     editor::HierarchyPanelState hierarchyState;
     editor::ScenePanelState scenePanelState;
+    editor::InspectorState inspectorState;
     editor::EditorHistory history;
     int gizmoOperation{0};
     int gizmoMode{0};
@@ -118,6 +104,57 @@ namespace lve {
     editor::FileDialogState fileDialogState;
     editor::MaterialPickResult pendingMaterialPick{};
     editor::MaterialTextureSlot pendingMaterialPickSlot{editor::MaterialTextureSlot::BaseColor};
+
+    void buildFrameUI(
+      EditorFrameResult &result,
+      float frameTime,
+      const glm::vec3 &cameraPos,
+      const glm::vec3 &cameraRot,
+      bool &wireframeEnabled,
+      bool &normalViewEnabled,
+      bool &useOrthoCamera,
+      SceneSystem &sceneSystem,
+      const std::vector<LveGameObject*> &objects,
+      LveGameObject::id_t protectedId,
+      SpriteAnimator *&animator,
+      const glm::mat4 &view,
+      const glm::mat4 &projection,
+      VkExtent2D viewportExtent,
+      editor::ResourceBrowserState &resourceBrowserState,
+      void *sceneViewTextureId,
+      void *gameViewTextureId);
+    bool applyHistoryActions(
+      EditorFrameResult &result,
+      SceneSystem &sceneSystem);
+    void applyResourceActions(
+      EditorFrameResult &result,
+      SceneSystem &sceneSystem,
+      SpriteAnimator *&animator,
+      editor::ResourceBrowserState &resourceBrowserState);
+    void applyInspectorActions(
+      EditorFrameResult &result,
+      SceneSystem &sceneSystem,
+      SpriteAnimator *&animator,
+      editor::ResourceBrowserState &resourceBrowserState);
+    void handlePicking(
+      EditorFrameResult &result,
+      const std::vector<LveGameObject*> &objects,
+      const glm::mat4 &view,
+      const glm::mat4 &projection);
+    void handleCreateDelete(
+      EditorFrameResult &result,
+      SceneSystem &sceneSystem,
+      SpriteAnimator *&animator,
+      const glm::mat4 &view,
+      const glm::vec3 &cameraPos,
+      editor::ResourceBrowserState &resourceBrowserState,
+      LveGameObject::id_t protectedId,
+      bool historyTriggered);
+    void handleSceneActions(
+      EditorFrameResult &result,
+      SceneSystem &sceneSystem,
+      SpriteAnimator *&animator,
+      LveGameObject::id_t viewerId);
   };
 
 } // namespace lve

@@ -57,9 +57,10 @@ namespace lve{
         );
 
         int lightIndex = 0;
-        for(auto& kv: frameInfo.gameObjects){
-            auto& obj = kv.second;
-            if(obj.pointLight == nullptr) continue;
+        for (auto *objPtr : frameInfo.gameObjects) {
+            if (!objPtr) continue;
+            auto &obj = *objPtr;
+            if (obj.pointLight == nullptr) continue;
 
             assert(lightIndex < MAX_LIGHTS && "Point lights exceed maximum specified");
 
@@ -100,20 +101,21 @@ namespace lve{
 
     void PointLightSystem::render(FrameInfo &frameInfo){
         // sort lights by distance (back-to-front)
-        std::vector<std::pair<float, LveGameObject::id_t>> sorted;
+        std::vector<LveGameObject*> sorted;
         sorted.reserve(frameInfo.gameObjects.size());
-        for (auto &kv : frameInfo.gameObjects) {
-            auto &obj = kv.second;
-            if (obj.pointLight == nullptr) continue;
-
-            auto offset = frameInfo.camera.getPosition() - obj.transform.translation;
-            float disSquared = glm::dot(offset, offset);
-            sorted.emplace_back(disSquared, obj.getId());
+        for (auto *objPtr : frameInfo.gameObjects) {
+            if (!objPtr) continue;
+            if (objPtr->pointLight == nullptr) continue;
+            sorted.push_back(objPtr);
         }
         std::sort(sorted.begin(), sorted.end(),
-            [](const auto &a, const auto &b) {
-                if (a.first != b.first) return a.first < b.first;
-                return a.second < b.second;
+            [&](const auto *a, const auto *b) {
+                const auto offsetA = frameInfo.camera.getPosition() - a->transform.translation;
+                const auto offsetB = frameInfo.camera.getPosition() - b->transform.translation;
+                float disSquaredA = glm::dot(offsetA, offsetA);
+                float disSquaredB = glm::dot(offsetB, offsetB);
+                if (disSquaredA != disSquaredB) return disSquaredA < disSquaredB;
+                return a->getId() < b->getId();
             });
 
         lvePipeline->bind(frameInfo.commandBuffer);
@@ -131,8 +133,9 @@ namespace lve{
 
         // iterate through sorted lights in reverse order
         for (auto it = sorted.rbegin(); it != sorted.rend(); ++it) {
-            // use game obj id to find light object
-            auto& obj = frameInfo.gameObjects.at(it->second);
+            auto *objPtr = *it;
+            if (!objPtr) continue;
+            auto &obj = *objPtr;
 
             PointLightPushConstants push{};
             push.position = glm::vec4(obj.transform.translation, 1.f);

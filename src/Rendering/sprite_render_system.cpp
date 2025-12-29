@@ -109,8 +109,9 @@ namespace lve {
       0,
       nullptr);
 
-    for (auto &kv : frameInfo.gameObjects) {
-      auto &obj = kv.second;
+    for (auto *objPtr : frameInfo.gameObjects) {
+      if (!objPtr) continue;
+      auto &obj = *objPtr;
       if (!obj.isSprite) continue;
       if (obj.model == nullptr) continue;
 
@@ -181,9 +182,7 @@ namespace lve {
       push.debugView = 0;
       push.atlasCols = obj.atlasColumns;
       push.atlasRows = obj.atlasRows;
-      const int stateKey = static_cast<int>(obj.objState);
-      auto stateIt = obj.spriteStates.find(stateKey);
-      push.rowIndex = (stateIt != obj.spriteStates.end()) ? stateIt->second.row : 0;
+      push.rowIndex = obj.hasSpriteState ? obj.spriteState.row : 0;
 
       vkCmdPushConstants(
         frameInfo.commandBuffer,
