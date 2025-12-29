@@ -360,7 +360,7 @@ namespace lve {
   }
 
   void SceneSystem::loadGameObjects() {
-    resourceBrowserState.pendingRefresh = true;
+    resourceBrowserState.browser.pendingRefresh = true;
     resourceBrowserState.activeMeshPath = "Assets/models/colored_cube.obj";
     resourceBrowserState.activeSpriteMetaPath = "Assets/textures/characters/player.json";
 

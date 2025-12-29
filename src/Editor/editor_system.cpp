@@ -7,7 +7,9 @@
 #include <glm/glm.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -15,6 +17,8 @@
 namespace lve {
 
   namespace {
+    namespace fs = std::filesystem;
+
     struct GameObjectSnapshot {
       LveGameObject::id_t id{0};
       bool isSprite{false};
@@ -101,6 +105,87 @@ namespace lve {
         obj.nodeOverrides = snapshot.nodeOverrides;
       }
       obj.transformDirty = true;
+    }
+
+    std::string toLowerCopy(const std::string &value) {
+      std::string out;
+      out.reserve(value.size());
+      for (char ch : value) {
+        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+      }
+      return out;
+    }
+
+    bool hasExtension(const fs::path &path, std::initializer_list<const char *> exts) {
+      const std::string ext = toLowerCopy(path.extension().string());
+      for (const char *candidate : exts) {
+        if (ext == toLowerCopy(candidate)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    bool isMeshFile(const fs::path &path) {
+      return hasExtension(path, {".obj", ".fbx", ".gltf", ".glb"});
+    }
+
+    bool isSpriteMetaFile(const fs::path &path) {
+      return hasExtension(path, {".json"});
+    }
+
+    bool isTextureFile(const fs::path &path) {
+      return hasExtension(path, {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr", ".tiff", ".ktx", ".ktx2"});
+    }
+
+    std::string pickImportSubdir(const fs::path &path) {
+      if (isMeshFile(path)) return "models";
+      if (isTextureFile(path) || isSpriteMetaFile(path)) return "textures";
+      return "imported";
+    }
+
+    fs::path makeUniquePath(const fs::path &path) {
+      std::error_code ec;
+      if (!fs::exists(path, ec)) {
+        return path;
+      }
+      const fs::path parent = path.parent_path();
+      const std::string stem = path.stem().string();
+      const std::string ext = path.extension().string();
+      for (int i = 1; i < 1000; ++i) {
+        fs::path candidate = parent / (stem + "_" + std::to_string(i) + ext);
+        if (!fs::exists(candidate, ec)) {
+          return candidate;
+        }
+      }
+      return path;
+    }
+
+    bool copyIntoAssets(
+      const fs::path &source,
+      const std::string &root,
+      fs::path &outPath,
+      std::string &outError) {
+      std::error_code ec;
+      if (!fs::exists(source, ec) || fs::is_directory(source, ec)) {
+        outError = "Source file not found";
+        return false;
+      }
+      fs::path rootPath = root.empty() ? fs::path("Assets") : fs::path(root);
+      fs::path targetDir = rootPath / pickImportSubdir(source);
+      fs::create_directories(targetDir, ec);
+      if (ec) {
+        outError = "Failed to create target directory";
+        return false;
+      }
+      fs::path destPath = makeUniquePath(targetDir / source.filename());
+      fs::copy_file(source, destPath, fs::copy_options::none, ec);
+      if (ec) {
+        outError = "Copy failed";
+        return false;
+      }
+      outPath = destPath;
+      return true;
     }
 
     struct Ray {
@@ -296,6 +381,23 @@ namespace lve {
         if (ImGui::MenuItem("Load Scene")) {
           result.sceneActions.loadRequested = true;
         }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Import")) {
+          showFileDialog = true;
+          fileDialogState.title = "Import";
+          fileDialogState.okLabel = "Open";
+          fileDialogState.allowDirectories = false;
+          fileDialogState.browser.restrictToRoot = false;
+          std::error_code ec;
+          const auto current = std::filesystem::current_path(ec);
+          if (!ec) {
+            fileDialogState.browser.rootPath = current.root_path().generic_string();
+            if (fileDialogState.browser.currentPath.empty()) {
+              fileDialogState.browser.currentPath = current.generic_string();
+            }
+          }
+          fileDialogState.browser.pendingRefresh = true;
+        }
         ImGui::EndMenu();
       }
       if (ImGui::BeginMenu("Edit")) {
@@ -458,6 +560,98 @@ namespace lve {
 
     if (showResourceBrowser) {
       result.resourceActions = editor::BuildResourceBrowserPanel(resourceBrowserState, result.selectedObject, &showResourceBrowser);
+    }
+
+    if (showFileDialog) {
+      result.fileDialogActions = editor::BuildFileDialogPanel(fileDialogState, &showFileDialog);
+    }
+
+    if (result.fileDialogActions.accepted) {
+      importOptions.pendingPath = result.fileDialogActions.selectedPath;
+      importOptions.error.clear();
+      importOptions.mode = 0;
+      importOptions.show = true;
+      importOptions.openRequested = true;
+    }
+
+    if (importOptions.openRequested) {
+      ImGui::OpenPopup("Import Options");
+      importOptions.openRequested = false;
+    }
+
+    if (importOptions.show) {
+      bool popupOpen = true;
+      if (ImGui::BeginPopupModal("Import Options", &popupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextWrapped("Source: %s", importOptions.pendingPath.c_str());
+        ImGui::Separator();
+        if (ImGui::RadioButton("Link external file", importOptions.mode == 0)) {
+          importOptions.mode = 0;
+        }
+        if (ImGui::RadioButton("Copy into Assets", importOptions.mode == 1)) {
+          importOptions.mode = 1;
+        }
+
+        std::string previewTarget = "-";
+        if (importOptions.mode == 1) {
+          const fs::path srcPath = importOptions.pendingPath;
+          const std::string root = resourceBrowserState.browser.rootPath.empty()
+            ? "Assets"
+            : resourceBrowserState.browser.rootPath;
+          const fs::path targetDir = fs::path(root) / pickImportSubdir(srcPath);
+          previewTarget = (targetDir / srcPath.filename()).generic_string();
+        }
+
+        ImGui::Spacing();
+        ImGui::Text("Target: %s", previewTarget.c_str());
+
+        if (!importOptions.error.empty()) {
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(1.f, 0.35f, 0.35f, 1.f), "Error: %s", importOptions.error.c_str());
+        }
+
+        ImGui::Spacing();
+        bool doImport = false;
+        if (ImGui::Button("Import")) {
+          doImport = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+          popupOpen = false;
+          ImGui::CloseCurrentPopup();
+        }
+
+        if (doImport) {
+          importOptions.error.clear();
+          const fs::path sourcePath = importOptions.pendingPath;
+          std::string finalPath = sourcePath.generic_string();
+          fs::path copiedPath;
+
+          if (importOptions.mode == 1) {
+            if (!copyIntoAssets(sourcePath, resourceBrowserState.browser.rootPath, copiedPath, importOptions.error)) {
+              doImport = false;
+            } else {
+              finalPath = copiedPath.generic_string();
+              resourceBrowserState.browser.currentPath = copiedPath.parent_path().generic_string();
+              resourceBrowserState.browser.pendingRefresh = true;
+            }
+          }
+
+          if (doImport) {
+            if (isMeshFile(finalPath)) {
+              resourceBrowserState.activeMeshPath = finalPath;
+            } else if (isSpriteMetaFile(finalPath)) {
+              resourceBrowserState.activeSpriteMetaPath = finalPath;
+            }
+            popupOpen = false;
+            ImGui::CloseCurrentPopup();
+          }
+        }
+
+        ImGui::EndPopup();
+      }
+      if (!popupOpen) {
+        importOptions.show = false;
+      }
     }
 
     auto &history = getHistory();
@@ -710,15 +904,17 @@ namespace lve {
       }
     }
 
-    glm::vec3 spawnForward{0.f, 0.f, -1.f};
+    glm::vec3 spawnForward{0.f, 0.f, 1.f};
+    glm::vec3 spawnOrigin = cameraPos;
     {
       glm::mat4 invView = glm::inverse(view);
-      glm::vec3 forward{-invView[2][0], -invView[2][1], -invView[2][2]};
+      spawnOrigin = glm::vec3(invView[3]);
+      glm::vec3 forward{invView[2][0], invView[2][1], invView[2][2]};
       if (glm::length(forward) > 0.0001f) {
         spawnForward = glm::normalize(forward);
       }
     }
-    const glm::vec3 spawnPos = cameraPos + spawnForward * 2.f;
+    const glm::vec3 spawnPos = spawnOrigin + spawnForward * 2.f;
     const std::string meshPathForNew = resourceBrowserState.activeMeshPath.empty()
       ? "Assets/models/colored_cube.obj"
       : resourceBrowserState.activeMeshPath;

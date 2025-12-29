@@ -34,6 +34,7 @@ namespace lve {
     editor::HierarchyActions hierarchyActions{};
     editor::ScenePanelActions sceneActions{};
     editor::ResourceBrowserActions resourceActions{};
+    editor::FileDialogActions fileDialogActions{};
     editor::InspectorActions inspectorActions{};
     LveGameObject *selectedObject{nullptr};
     bool undoRequested{false};
@@ -84,6 +85,14 @@ namespace lve {
     const editor::EditorHistory &getHistory() const { return history; }
 
   private:
+    struct ImportOptionsState {
+      bool show{false};
+      bool openRequested{false};
+      int mode{0};
+      std::string pendingPath{};
+      std::string error{};
+    };
+
     ImGuiLayer imgui;
     LveDevice &device;
     editor::HierarchyPanelState hierarchyState;
@@ -96,8 +105,11 @@ namespace lve {
     bool showScene{true};
     bool showInspector{true};
     bool showResourceBrowser{true};
+    bool showFileDialog{false};
+    ImportOptionsState importOptions;
     bool showSceneView{true};
     bool showGameView{true};
+    editor::FileDialogState fileDialogState;
   };
 
 } // namespace lve
