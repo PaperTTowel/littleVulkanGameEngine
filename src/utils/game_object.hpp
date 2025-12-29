@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Rendering/model.hpp"
+#include "Rendering/material.hpp"
 #include "Engine/Backend/swap_chain.hpp"
 #include "Rendering/texture.hpp"
 #include "utils/sprite_metadata.hpp"
@@ -96,6 +97,7 @@ namespace lve {
 
     // Optional pointer components
     std::shared_ptr<LveModel> model{};
+    std::shared_ptr<LveMaterial> material{};
     std::shared_ptr<LveTexture> diffuseMap = nullptr;
     std::unique_ptr<PointLightComponent> pointLight = nullptr;
 

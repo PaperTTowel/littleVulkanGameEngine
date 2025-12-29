@@ -27,6 +27,7 @@ namespace lve {
 
   struct SpriteComponent {
     std::string spriteMeta;
+    std::string spriteMetaGuid;
     std::string state{"idle"};
     BillboardKind billboard{BillboardKind::Cylindrical};
     int layer{0};
@@ -34,7 +35,9 @@ namespace lve {
 
   struct MeshComponent {
     std::string model;
+    std::string modelGuid;
     std::string material;
+    std::string materialGuid;
     struct NodeOverride {
       int node{-1};
       TransformData transform{};

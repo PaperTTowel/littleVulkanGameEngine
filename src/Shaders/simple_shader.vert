@@ -28,6 +28,7 @@ layout(push_constant) uniform Push {
   mat4 modelMatrix;
   ivec4 flags0;
   ivec4 flags1;
+  vec4 baseColor;
 } push;
 
 void main() {

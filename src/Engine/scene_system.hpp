@@ -1,8 +1,10 @@
 #pragma once
 
 #include "Backend/device.hpp"
+#include "Engine/asset_database.hpp"
 #include "Engine/scene.hpp"
 #include "Editor/Workflow/resource_browser_panel.hpp"
+#include "Rendering/material.hpp"
 #include "utils/game_object.hpp"
 #include "utils/sprite_animator.hpp"
 #include "utils/sprite_metadata.hpp"
@@ -24,6 +26,9 @@ namespace lve {
     editor::ResourceBrowserState &getResourceBrowserState() { return resourceBrowserState; }
     const editor::ResourceBrowserState &getResourceBrowserState() const { return resourceBrowserState; }
 
+    AssetDatabase &getAssetDatabase() { return assetDatabase; }
+    const AssetDatabase &getAssetDatabase() const { return assetDatabase; }
+
     SpriteAnimator *getSpriteAnimator() { return spriteAnimator.get(); }
     const SpriteMetadata &getSpriteMetadata() const { return playerMeta; }
 
@@ -31,12 +36,15 @@ namespace lve {
     void setCharacterId(LveGameObject::id_t id) { characterId = id; }
 
     void loadGameObjects();
-    Scene exportSceneSnapshot() const;
+    Scene exportSceneSnapshot();
     void importSceneSnapshot(const Scene &scene, std::optional<LveGameObject::id_t> protectedId);
     void saveSceneToFile(const std::string &path);
     void loadSceneFromFile(const std::string &path, std::optional<LveGameObject::id_t> protectedId);
 
     std::shared_ptr<LveModel> loadModelCached(const std::string &path);
+    std::shared_ptr<LveMaterial> loadMaterialCached(const std::string &path);
+    bool updateMaterialFromData(const std::string &path, const MaterialData &data);
+    bool applyMaterialToObject(LveGameObject &obj, const std::string &path);
     bool setActiveSpriteMetadata(const std::string &path);
     void ensureNodeOverrides(LveGameObject &obj);
     void applyNodeOverrides(LveGameObject &obj, const MeshComponent &mesh);
@@ -72,11 +80,13 @@ namespace lve {
     LveDevice &lveDevice;
     LveGameObjectManager gameObjectManager;
     editor::ResourceBrowserState resourceBrowserState;
+    AssetDatabase assetDatabase;
     SpriteMetadata playerMeta;
     std::unique_ptr<SpriteAnimator> spriteAnimator;
     std::shared_ptr<LveModel> cubeModel;
     std::shared_ptr<LveModel> spriteModel;
     std::unordered_map<std::string, std::shared_ptr<LveModel>> modelCache;
+    std::unordered_map<std::string, std::shared_ptr<LveMaterial>> materialCache;
     LveGameObject::id_t characterId{0};
   };
 } // namespace lve

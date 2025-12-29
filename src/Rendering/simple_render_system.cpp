@@ -19,6 +19,7 @@ namespace lve {
     glm::mat4 modelMatrix{1.f};
     glm::ivec4 flags0{0}; // useTexture, currentFrame, objectState, direction
     glm::ivec4 flags1{0}; // debugView, padding
+    glm::vec4 baseColorFactor{1.f};
   };
 
   SimpleRenderSystem::SimpleRenderSystem(LveDevice &device, VkRenderPass renderPass, VkDescriptorSetLayout globalSetLayout)
@@ -113,15 +114,20 @@ namespace lve {
 
       const int frameIndex = frameInfo.frameIndex;
       const auto bufferInfo = obj.getBufferInfo(frameIndex);
+      const LveTexture *overrideTexture = obj.material ? obj.material->getBaseColorTexture().get() : nullptr;
+      const bool hasOverrideTexture = overrideTexture != nullptr;
+      const glm::vec4 baseColorFactor = obj.material
+        ? obj.material->getData().factors.baseColor
+        : glm::vec4(1.f);
 
       obj.model->bind(frameInfo.commandBuffer);
 
       const auto &nodes = obj.model->getNodes();
       if (nodes.empty()) {
         VkDescriptorSet &gameObjectDescriptorSet = obj.descriptorSets[frameIndex];
-        const LveTexture *currentTexture = obj.diffuseMap.get();
+        const LveTexture *currentTexture = hasOverrideTexture ? overrideTexture : obj.diffuseMap.get();
         if (gameObjectDescriptorSet == VK_NULL_HANDLE || obj.descriptorTextures[frameIndex] != currentTexture) {
-          auto imageInfo = obj.diffuseMap->getImageInfo();
+          auto imageInfo = currentTexture->getImageInfo();
           LveDescriptorWriter writer(*renderSystemLayout, frameInfo.frameDescriptorPool);
           writer.writeBuffer(0, &bufferInfo)
             .writeImage(1, &imageInfo);
@@ -148,11 +154,12 @@ namespace lve {
         SimplePushConstantData push{};
         push.modelMatrix = obj.transform.mat4();
         push.flags0 = glm::ivec4(
-          obj.enableTextureType,
+          hasOverrideTexture ? 1 : obj.enableTextureType,
           obj.currentFrame,
           static_cast<int>(obj.objState),
           static_cast<int>(obj.directions));
         push.flags1 = glm::ivec4(normalViewEnabled ? 1 : 0, 0, 0, 0);
+        push.baseColorFactor = baseColorFactor;
 
         vkCmdPushConstants(
           frameInfo.commandBuffer,
@@ -198,9 +205,12 @@ namespace lve {
           }
           const auto &subMesh = subMeshes[static_cast<std::size_t>(meshIndex)];
           const LveTexture *subMeshTexture = obj.model->getDiffuseTextureForSubMesh(subMesh);
-          const LveTexture *currentTexture = subMeshTexture ? subMeshTexture : obj.diffuseMap.get();
-          const int useTexture =
-            (obj.enableTextureType && subMeshTexture != nullptr) ? 1 : 0;
+          const LveTexture *currentTexture = hasOverrideTexture
+            ? overrideTexture
+            : (subMeshTexture ? subMeshTexture : obj.diffuseMap.get());
+          const int useTexture = hasOverrideTexture
+            ? 1
+            : ((obj.enableTextureType && subMeshTexture != nullptr) ? 1 : 0);
           auto &cache = obj.subMeshDescriptors[static_cast<std::size_t>(meshIndex)];
           VkDescriptorSet &descriptorSet = cache.sets[frameIndex];
           if (descriptorSet == VK_NULL_HANDLE || cache.textures[frameIndex] != currentTexture) {
@@ -236,6 +246,7 @@ namespace lve {
             static_cast<int>(obj.objState),
             static_cast<int>(obj.directions));
           push.flags1 = glm::ivec4(normalViewEnabled ? 1 : 0, 0, 0, 0);
+          push.baseColorFactor = baseColorFactor;
 
           vkCmdPushConstants(
             frameInfo.commandBuffer,

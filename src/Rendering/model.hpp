@@ -10,6 +10,7 @@
 
 // std
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace lve{
@@ -53,6 +54,11 @@ namespace lve{
       TextureSource diffuse{};
     };
 
+    struct MaterialPathInfo {
+      TextureSource::Kind diffuseKind{TextureSource::Kind::None};
+      std::string diffusePath{};
+    };
+
     struct Node {
       std::string name{};
       int parent{-1};
@@ -86,6 +92,9 @@ namespace lve{
 
     const std::vector<Node> &getNodes() const { return nodes; }
     const std::vector<SubMesh> &getSubMeshes() const { return subMeshes; }
+    const std::vector<MaterialPathInfo> &getMaterialPathInfo() const { return materialPathInfo; }
+    std::string getDiffusePathForMaterialIndex(int materialIndex) const;
+    std::string getDiffusePathForSubMesh(const SubMesh &subMesh) const;
     const LveTexture *getDiffuseTextureForSubMesh(const SubMesh &subMesh) const;
     bool hasAnyDiffuseTexture() const;
 
@@ -120,5 +129,6 @@ namespace lve{
     std::vector<SubMesh> subMeshes;
     std::vector<Node> nodes;
     std::vector<std::shared_ptr<LveTexture>> materialDiffuseTextures;
+    std::vector<MaterialPathInfo> materialPathInfo;
   };
 } // namespace lve

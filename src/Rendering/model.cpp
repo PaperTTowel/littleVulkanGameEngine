@@ -229,6 +229,16 @@ namespace lve {
     createVertexBuffers(builder.vertices);
     createIndexBuffers(builder.indices);
     loadMaterials(builder.materials);
+    materialPathInfo.clear();
+    materialPathInfo.reserve(builder.materials.size());
+    for (const auto &material : builder.materials) {
+      MaterialPathInfo info{};
+      info.diffuseKind = material.diffuse.kind;
+      if (material.diffuse.kind == TextureSource::Kind::File) {
+        info.diffusePath = material.diffuse.path;
+      }
+      materialPathInfo.push_back(std::move(info));
+    }
     calculateBoundingBox(builder.vertices, builder.indices);
   }
 
@@ -340,6 +350,22 @@ namespace lve {
     }
     const auto &tex = materialDiffuseTextures[static_cast<std::size_t>(subMesh.materialIndex)];
     return tex ? tex.get() : nullptr;
+  }
+
+  std::string LveModel::getDiffusePathForMaterialIndex(int materialIndex) const {
+    if (materialIndex < 0 ||
+        static_cast<std::size_t>(materialIndex) >= materialPathInfo.size()) {
+      return {};
+    }
+    const auto &info = materialPathInfo[static_cast<std::size_t>(materialIndex)];
+    if (info.diffuseKind != TextureSource::Kind::File) {
+      return {};
+    }
+    return info.diffusePath;
+  }
+
+  std::string LveModel::getDiffusePathForSubMesh(const SubMesh &subMesh) const {
+    return getDiffusePathForMaterialIndex(subMesh.materialIndex);
   }
 
   bool LveModel::hasAnyDiffuseTexture() const {

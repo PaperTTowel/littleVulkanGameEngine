@@ -23,7 +23,8 @@ namespace lve {
 
   SceneSystem::SceneSystem(LveDevice &device)
     : lveDevice{device},
-      gameObjectManager{device} {}
+      gameObjectManager{device},
+      assetDatabase{"Assets"} {}
 
   ObjectState SceneSystem::objectStateFromString(const std::string &name) {
     if (name == "walking" || name == "walk") return ObjectState::WALKING;
@@ -39,17 +40,99 @@ namespace lve {
   }
 
   std::shared_ptr<LveModel> SceneSystem::loadModelCached(const std::string &path) {
-    auto it = modelCache.find(path);
+    if (path.empty()) return {};
+    const std::string assetPath = path;
+    auto it = modelCache.find(assetPath);
     if (it != modelCache.end()) {
       return it->second;
     }
-    auto uniqueModel = LveModel::createModelFromFile(lveDevice, path);
+    const std::string resolvedPath = assetDatabase.resolveAssetPath(assetPath);
+    auto uniqueModel = LveModel::createModelFromFile(lveDevice, resolvedPath);
     auto sharedModel = std::shared_ptr<LveModel>(std::move(uniqueModel));
-    modelCache[path] = sharedModel;
-    if (path == "Assets/models/colored_cube.obj") {
+    modelCache[assetPath] = sharedModel;
+    if (assetPath == "Assets/models/colored_cube.obj") {
       cubeModel = sharedModel;
     }
     return sharedModel;
+  }
+
+  std::shared_ptr<LveMaterial> SceneSystem::loadMaterialCached(const std::string &path) {
+    if (path.empty()) return {};
+    auto it = materialCache.find(path);
+    if (it != materialCache.end()) {
+      return it->second;
+    }
+    std::string error;
+    auto material = LveMaterial::loadFromFile(
+      lveDevice,
+      path,
+      &error,
+      [this](const std::string &assetPath) {
+        return assetDatabase.resolveAssetPath(assetPath);
+      });
+    if (!material) {
+      std::cerr << "Failed to load material " << path;
+      if (!error.empty()) {
+        std::cerr << ": " << error;
+      }
+      std::cerr << "\n";
+      return {};
+    }
+    materialCache[path] = material;
+    return material;
+  }
+
+  bool SceneSystem::updateMaterialFromData(const std::string &path, const MaterialData &data) {
+    if (path.empty()) return false;
+    auto it = materialCache.find(path);
+    std::shared_ptr<LveMaterial> target;
+    if (it != materialCache.end()) {
+      target = it->second;
+    } else {
+      target = std::make_shared<LveMaterial>();
+      materialCache[path] = target;
+    }
+
+    if (!target) {
+      return false;
+    }
+
+    target->setPath(path);
+    std::string error;
+    const bool ok = target->applyData(
+      lveDevice,
+      data,
+      &error,
+      [this](const std::string &assetPath) {
+        return assetDatabase.resolveAssetPath(assetPath);
+      });
+    if (!ok && !error.empty()) {
+      std::cerr << "Failed to update material " << path << ": " << error << "\n";
+    }
+    return ok;
+  }
+
+  bool SceneSystem::applyMaterialToObject(LveGameObject &obj, const std::string &path) {
+    if (path.empty()) {
+      obj.materialPath.clear();
+      obj.material.reset();
+    } else {
+      auto material = loadMaterialCached(path);
+      if (!material) {
+        return false;
+      }
+      obj.materialPath = path;
+      obj.material = material;
+    }
+
+    if (obj.material && obj.material->hasBaseColorTexture()) {
+      obj.enableTextureType = 1;
+    } else if (obj.model && obj.model->hasAnyDiffuseTexture()) {
+      obj.enableTextureType = 1;
+    } else {
+      obj.enableTextureType = 0;
+    }
+    return true;
   }
 
   void SceneSystem::ensureNodeOverrides(LveGameObject &obj) {
@@ -86,18 +169,20 @@ namespace lve {
 
   bool SceneSystem::setActiveSpriteMetadata(const std::string &path) {
     SpriteMetadata meta{};
-    if (!loadSpriteMetadata(path, meta)) {
+    const std::string assetPath = path;
+    const std::string resolvedPath = assetDatabase.resolveAssetPath(assetPath);
+    if (!loadSpriteMetadata(resolvedPath, meta)) {
       std::cerr << "Failed to load sprite metadata: " << path << "\n";
       return false;
     }
     playerMeta = meta;
-    resourceBrowserState.activeSpriteMetaPath = path;
+    resourceBrowserState.activeSpriteMetaPath = assetPath;
     spriteAnimator = std::make_unique<SpriteAnimator>(lveDevice, playerMeta);
 
     for (auto &kv : gameObjectManager.gameObjects) {
       auto &obj = kv.second;
       if (!obj.isSprite) continue;
-      obj.spriteMetaPath = path;
+      obj.spriteMetaPath = assetPath;
       spriteAnimator->applySpriteState(obj, obj.objState);
     }
     return true;
@@ -207,7 +292,7 @@ namespace lve {
     return light;
   }
 
-  Scene SceneSystem::exportSceneSnapshot() const {
+  Scene SceneSystem::exportSceneSnapshot() {
     Scene scene{};
     scene.version = 1;
     scene.resources.basePath = "Assets/";
@@ -240,6 +325,7 @@ namespace lve {
         e.type = EntityType::Sprite;
         SpriteComponent sc{};
         sc.spriteMeta = obj.spriteMetaPath.empty() ? "Assets/textures/characters/player.json" : obj.spriteMetaPath;
+        sc.spriteMetaGuid = assetDatabase.ensureMetaForAsset(sc.spriteMeta);
         sc.state = obj.spriteStateName.empty() ? objectStateToString(obj.objState) : obj.spriteStateName;
         sc.billboard = (obj.billboardMode == BillboardMode::Spherical) ? BillboardKind::Spherical
           : (obj.billboardMode == BillboardMode::Cylindrical ? BillboardKind::Cylindrical : BillboardKind::None);
@@ -249,7 +335,11 @@ namespace lve {
         e.type = EntityType::Mesh;
         MeshComponent mc{};
         mc.model = obj.modelPath.empty() ? "Assets/models/colored_cube.obj" : obj.modelPath;
+        mc.modelGuid = assetDatabase.ensureMetaForAsset(mc.model);
         mc.material = obj.materialPath;
+        if (!mc.material.empty()) {
+          mc.materialGuid = assetDatabase.ensureMetaForAsset(mc.material);
+        }
         if (!obj.nodeOverrides.empty()) {
           for (std::size_t i = 0; i < obj.nodeOverrides.size(); ++i) {
             const auto &override = obj.nodeOverrides[i];
@@ -278,6 +368,17 @@ namespace lve {
     cubeModel.reset();
     spriteModel.reset();
     modelCache.clear();
+    materialCache.clear();
+
+    auto resolveAssetPath = [this](const std::string &guid, const std::string &path) {
+      if (!guid.empty()) {
+        const std::string assetPath = assetDatabase.getPathForGuid(guid);
+        if (!assetPath.empty()) {
+          return assetPath;
+        }
+      }
+      return path;
+    };
 
     // reload sprite metadata if provided by first sprite entity
     std::string metaPath = resourceBrowserState.activeSpriteMetaPath.empty()
@@ -285,7 +386,10 @@ namespace lve {
       : resourceBrowserState.activeSpriteMetaPath;
     for (const auto &e : scene.entities) {
       if (e.sprite) {
-        metaPath = e.sprite->spriteMeta.empty() ? metaPath : e.sprite->spriteMeta;
+        const std::string assetPath = resolveAssetPath(e.sprite->spriteMetaGuid, e.sprite->spriteMeta);
+        if (!assetPath.empty()) {
+          metaPath = assetPath;
+        }
         break;
       }
     }
@@ -312,7 +416,11 @@ namespace lve {
 
       if (e.type == EntityType::Sprite && e.sprite) {
         ObjectState desiredState = objectStateFromString(e.sprite->state);
-        auto &obj = createSpriteObject(e.transform.position, desiredState, e.sprite->spriteMeta);
+        std::string spritePath = resolveAssetPath(e.sprite->spriteMetaGuid, e.sprite->spriteMeta);
+        if (spritePath.empty()) {
+          spritePath = metaPath;
+        }
+        auto &obj = createSpriteObject(e.transform.position, desiredState, spritePath);
         obj.transform.rotation = e.transform.rotation;
         obj.transform.scale = e.transform.scale;
         obj.name = !e.name.empty() ? e.name : "Sprite " + std::to_string(obj.getId());
@@ -327,12 +435,17 @@ namespace lve {
       }
 
       if (e.type == EntityType::Mesh && e.mesh) {
-        auto &obj = createMeshObject(e.transform.position, e.mesh->model);
+        const std::string modelPath = resolveAssetPath(e.mesh->modelGuid, e.mesh->model);
+        auto &obj = createMeshObject(e.transform.position, modelPath);
         obj.transform.rotation = e.transform.rotation;
         obj.transform.scale = e.transform.scale;
         obj.name = !e.name.empty() ? e.name : "Mesh " + std::to_string(obj.getId());
         obj.transformDirty = true;
         applyNodeOverrides(obj, *e.mesh);
+        const std::string materialPath = resolveAssetPath(e.mesh->materialGuid, e.mesh->material);
+        if (!materialPath.empty()) {
+          applyMaterialToObject(obj, materialPath);
+        }
         continue;
       }
     }
@@ -360,9 +473,13 @@ namespace lve {
   }
 
   void SceneSystem::loadGameObjects() {
+    assetDatabase.setRootPath(resourceBrowserState.browser.rootPath);
+    assetDatabase.initialize();
+
     resourceBrowserState.browser.pendingRefresh = true;
     resourceBrowserState.activeMeshPath = "Assets/models/colored_cube.obj";
     resourceBrowserState.activeSpriteMetaPath = "Assets/textures/characters/player.json";
+    resourceBrowserState.activeMaterialPath.clear();
 
     cubeModel = loadModelCached(resourceBrowserState.activeMeshPath);
     spriteModel = LveModel::createModelFromFile(lveDevice, "Assets/models/quad.obj");

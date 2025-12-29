@@ -196,6 +196,7 @@ namespace lve {
         const auto &s = *e.sprite;
         ss << ",\n" << indent(level + 1) << "\"sprite\": {\n";
         ss << indent(level + 2) << "\"spriteMeta\": \"" << s.spriteMeta << "\",\n";
+        ss << indent(level + 2) << "\"spriteMetaGuid\": \"" << s.spriteMetaGuid << "\",\n";
         ss << indent(level + 2) << "\"state\": \"" << s.state << "\",\n";
         ss << indent(level + 2) << "\"billboard\": \"" << toString(s.billboard) << "\",\n";
         ss << indent(level + 2) << "\"layer\": " << s.layer << "\n";
@@ -206,7 +207,9 @@ namespace lve {
         const auto &m = *e.mesh;
         ss << ",\n" << indent(level + 1) << "\"mesh\": {\n";
         ss << indent(level + 2) << "\"model\": \"" << m.model << "\",\n";
-        ss << indent(level + 2) << "\"material\": \"" << m.material << "\"";
+        ss << indent(level + 2) << "\"modelGuid\": \"" << m.modelGuid << "\",\n";
+        ss << indent(level + 2) << "\"material\": \"" << m.material << "\",\n";
+        ss << indent(level + 2) << "\"materialGuid\": \"" << m.materialGuid << "\"";
         if (!m.nodeOverrides.empty()) {
           ss << ",\n" << indent(level + 2) << "\"nodeOverrides\": [\n";
           for (std::size_t i = 0; i < m.nodeOverrides.size(); ++i) {
@@ -305,6 +308,7 @@ namespace lve {
       if (block.find("\"sprite\"") != std::string::npos) {
         SpriteComponent sc{};
         sc.spriteMeta = parseString(block, "spriteMeta", sc.spriteMeta);
+        sc.spriteMetaGuid = parseString(block, "spriteMetaGuid", sc.spriteMetaGuid);
         sc.state = parseString(block, "state", sc.state);
         sc.billboard = billboardFromString(parseString(block, "billboard", toString(sc.billboard)));
         sc.layer = parseInt(block, "layer", sc.layer);
@@ -314,7 +318,9 @@ namespace lve {
       if (block.find("\"mesh\"") != std::string::npos) {
         MeshComponent mc{};
         mc.model = parseString(block, "model", mc.model);
+        mc.modelGuid = parseString(block, "modelGuid", mc.modelGuid);
         mc.material = parseString(block, "material", mc.material);
+        mc.materialGuid = parseString(block, "materialGuid", mc.materialGuid);
         const auto overrideBlocks = extractObjectArrayBlocks(block, "nodeOverrides");
         for (const auto &overrideBlock : overrideBlocks) {
           MeshComponent::NodeOverride ov{};

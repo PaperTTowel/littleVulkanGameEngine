@@ -53,6 +53,10 @@ namespace lve::editor {
       return hasExtension(path, {".json"});
     }
 
+    bool isMaterialFile(const fs::path &path) {
+      return hasExtension(path, {".mat"});
+    }
+
     void scanDirectory(
       const std::string &root,
       const std::string &filter,
@@ -70,6 +74,7 @@ namespace lve::editor {
           continue;
         }
         if (!it->is_regular_file(ec)) continue;
+        if (toLowerCopy(it->path().extension().string()) == ".meta") continue;
         if (matchesFilter(it->path(), filter)) {
           outFiles.push_back(toGenericString(it->path()));
         }
@@ -302,6 +307,8 @@ namespace lve::editor {
               label += " [Mesh]";
             } else if (isSpriteMetaFile(path)) {
               label += " [SpriteMeta]";
+            } else if (isMaterialFile(path)) {
+              label += " [Material]";
             }
           }
           if (ImGui::Selectable(label.c_str(), isSel, ImGuiSelectableFlags_AllowDoubleClick)) {
@@ -317,6 +324,11 @@ namespace lve::editor {
           }
           if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", path.c_str());
+          }
+          if (ImGui::BeginDragDropSource()) {
+            ImGui::SetDragDropPayload("ASSET_PATH", path.c_str(), path.size() + 1);
+            ImGui::TextUnformatted(label.c_str());
+            ImGui::EndDragDropSource();
           }
           if (contextMenu && contextMenu->enabled) {
             if (ImGui::BeginPopupContextItem("FileContext")) {
@@ -365,6 +377,30 @@ namespace lve::editor {
                   if (contextMenu->resourceActions) {
                     contextMenu->resourceActions->setActiveSpriteMeta = true;
                     contextMenu->resourceActions->applySpriteMetaToSelection = true;
+                  }
+                }
+                ImGui::EndDisabled();
+              } else if (isMaterialFile(path)) {
+                const bool canApplyMaterial = contextMenu->selected &&
+                  contextMenu->selected->model != nullptr &&
+                  !contextMenu->selected->isSprite &&
+                  !contextMenu->selected->pointLight;
+                if (ImGui::MenuItem("Set Active Material")) {
+                  if (contextMenu->resourceState) {
+                    contextMenu->resourceState->activeMaterialPath = path;
+                  }
+                  if (contextMenu->resourceActions) {
+                    contextMenu->resourceActions->setActiveMaterial = true;
+                  }
+                }
+                ImGui::BeginDisabled(!canApplyMaterial);
+                if (ImGui::MenuItem("Apply to Selected Mesh")) {
+                  if (contextMenu->resourceState) {
+                    contextMenu->resourceState->activeMaterialPath = path;
+                  }
+                  if (contextMenu->resourceActions) {
+                    contextMenu->resourceActions->setActiveMaterial = true;
+                    contextMenu->resourceActions->applyMaterialToSelection = true;
                   }
                 }
                 ImGui::EndDisabled();
@@ -421,6 +457,7 @@ namespace lve::editor {
     const std::string selectedFile = selection.selectedFile;
     const bool selectedIsMesh = !selectedFile.empty() && isMeshFile(selectedFile);
     const bool selectedIsSpriteMeta = !selectedFile.empty() && isSpriteMetaFile(selectedFile);
+    const bool selectedIsMaterial = !selectedFile.empty() && isMaterialFile(selectedFile);
     const bool fileSelectionChanged = state.browser.selectedFile != previousSelectedFile;
 
     if ((fileSelectionChanged || selection.fileActivated) && selectedIsMesh) {
@@ -433,7 +470,7 @@ namespace lve::editor {
     ImGui::Separator();
     ImGui::Text("Selected: %s", selectedFile.empty() ? "-" : selectedFile.c_str());
 
-    if (ImGui::BeginTable("ActiveAssets", 2, ImGuiTableFlags_SizingStretchSame)) {
+    if (ImGui::BeginTable("ActiveAssets", 3, ImGuiTableFlags_SizingStretchSame)) {
       ImGui::TableNextColumn();
       ImGui::TextUnformatted("Mesh");
       ImGui::TextWrapped("%s", state.activeMeshPath.c_str());
@@ -463,6 +500,24 @@ namespace lve::editor {
       ImGui::BeginDisabled(!selectedIsSpriteMeta || !canApplySprite);
       if (ImGui::Button("Apply to Selected Sprite")) {
         actions.applySpriteMetaToSelection = true;
+      }
+      ImGui::EndDisabled();
+
+      ImGui::TableNextColumn();
+      ImGui::TextUnformatted("Material");
+      ImGui::TextWrapped("%s", state.activeMaterialPath.empty() ? "-" : state.activeMaterialPath.c_str());
+      ImGui::BeginDisabled(!selectedIsMaterial);
+      if (ImGui::Button("Set Active Material")) {
+        state.activeMaterialPath = selectedFile;
+        actions.setActiveMaterial = true;
+      }
+      ImGui::EndDisabled();
+      const bool canApplyMaterial = selected && selected->model != nullptr && !selected->isSprite && !selected->pointLight;
+      ImGui::BeginDisabled(!selectedIsMaterial || !canApplyMaterial);
+      if (ImGui::Button("Apply to Selected Mesh")) {
+        state.activeMaterialPath = selectedFile;
+        actions.setActiveMaterial = true;
+        actions.applyMaterialToSelection = true;
       }
       ImGui::EndDisabled();
       ImGui::EndTable();

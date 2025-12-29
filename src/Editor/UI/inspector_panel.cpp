@@ -2,12 +2,17 @@
 
 #include <imgui.h>
 #include <ImGuizmo.h>
+#include <backends/imgui_impl_vulkan.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
+#include <deque>
+#include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstdio>
@@ -15,6 +20,22 @@
 namespace lve::editor {
 
   namespace {
+    void retirePreviewTexture(std::shared_ptr<LveTexture> texture) {
+      static std::deque<std::shared_ptr<LveTexture>> retired;
+      if (texture) {
+        retired.push_back(std::move(texture));
+      }
+      constexpr std::size_t kMaxRetired = 16;
+      while (retired.size() > kMaxRetired) {
+        retired.pop_front();
+      }
+    }
+
+    struct TexturePreviewCache {
+      std::shared_ptr<LveTexture> texture{};
+      VkDescriptorSet descriptor{VK_NULL_HANDLE};
+    };
+
     ObjectState stateFromName(const std::string &name) {
       if (name == "walking" || name == "walk") return ObjectState::WALKING;
       return ObjectState::IDLE;
@@ -48,6 +69,65 @@ namespace lve::editor {
       }
       return true;
     }
+
+    std::string toLowerCopy(const std::string &value) {
+      std::string out;
+      out.reserve(value.size());
+      for (char ch : value) {
+        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+      }
+      return out;
+    }
+
+    bool hasExtension(const std::filesystem::path &path, std::initializer_list<const char *> exts) {
+      const std::string ext = toLowerCopy(path.extension().string());
+      for (const char *candidate : exts) {
+        if (ext == toLowerCopy(candidate)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    bool isTextureFile(const std::string &path) {
+      return hasExtension(std::filesystem::path(path),
+        {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr", ".tiff", ".ktx", ".ktx2"});
+    }
+
+    ImTextureID getPreviewTextureId(
+      const std::shared_ptr<LveTexture> &texture,
+      TexturePreviewCache &cache) {
+      if (!texture) {
+        cache.texture.reset();
+        cache.descriptor = VK_NULL_HANDLE;
+        return ImTextureID_Invalid;
+      }
+      if (cache.texture != texture || cache.descriptor == VK_NULL_HANDLE) {
+        if (cache.texture && cache.texture != texture) {
+          retirePreviewTexture(cache.texture);
+        }
+        cache.texture = texture;
+        cache.descriptor = ImGui_ImplVulkan_AddTexture(
+          texture->sampler(),
+          texture->imageView(),
+          texture->getImageLayout());
+      }
+      return static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(cache.descriptor));
+    }
+
+    ImVec2 calcPreviewSize(const std::shared_ptr<LveTexture> &texture, float maxSize) {
+      if (!texture) return ImVec2{maxSize, maxSize};
+      const VkExtent3D extent = texture->getExtent();
+      if (extent.width == 0 || extent.height == 0) {
+        return ImVec2{maxSize, maxSize};
+      }
+      const float w = static_cast<float>(extent.width);
+      const float h = static_cast<float>(extent.height);
+      if (w >= h) {
+        return ImVec2{maxSize, maxSize * (h / w)};
+      }
+      return ImVec2{maxSize * (w / h), maxSize};
+    }
   } // namespace
 
   InspectorActions BuildInspectorPanel(
@@ -60,7 +140,8 @@ namespace lve::editor {
     const GizmoContext &gizmoContext,
     int gizmoOperation,
     int gizmoMode,
-    int &selectedNodeIndex) {
+    int &selectedNodeIndex,
+    const MaterialPickResult &materialPick) {
     InspectorActions actions{};
     if (open) {
       if (!ImGui::Begin("Inspector", open)) {
@@ -90,6 +171,18 @@ namespace lve::editor {
     static bool nodeOverrideEditing = false;
     static std::vector<NodeTransformOverride> nodeOverrideEditStart{};
     static const LveModel *lastSelectedModel = nullptr;
+    static LveGameObject::id_t lastMaterialOwnerId = 0;
+    static std::string lastMaterialPath{};
+    static const LveMaterial *lastMaterialPtr = nullptr;
+    static MaterialData materialDraft{};
+    static std::string materialDraftPath{};
+    static bool materialDirty = false;
+    static bool autoPreview = true;
+    static TexturePreviewCache baseColorPreview{};
+    static TexturePreviewCache normalPreview{};
+    static TexturePreviewCache metallicPreview{};
+    static TexturePreviewCache occlusionPreview{};
+    static TexturePreviewCache emissivePreview{};
 
     if (lastSelectedId != selected->getId()) {
       transformEditing = false;
@@ -106,10 +199,55 @@ namespace lve::editor {
       selectedNodeIndex = -1;
     }
 
+    auto refreshMaterialDraft = [&](const std::string &defaultPath) {
+      if (selected->material) {
+        materialDraft = selected->material->getData();
+      } else {
+        materialDraft = MaterialData{};
+      }
+      if (materialDraft.name.empty()) {
+        materialDraft.name = selected->name.empty()
+          ? ("Material_" + std::to_string(selected->getId()))
+          : selected->name;
+      }
+      materialDraftPath = selected->materialPath.empty()
+        ? defaultPath
+        : selected->materialPath;
+      materialDirty = false;
+      lastMaterialOwnerId = selected->getId();
+      lastMaterialPath = selected->materialPath;
+      lastMaterialPtr = selected->material.get();
+    };
+
+    auto applyMaterialPick = [&]() -> bool {
+      if (!materialPick.available) {
+        return false;
+      }
+      switch (materialPick.slot) {
+        case MaterialTextureSlot::BaseColor:
+          materialDraft.textures.baseColor = materialPick.path;
+          break;
+        case MaterialTextureSlot::Normal:
+          materialDraft.textures.normal = materialPick.path;
+          break;
+        case MaterialTextureSlot::MetallicRoughness:
+          materialDraft.textures.metallicRoughness = materialPick.path;
+          break;
+        case MaterialTextureSlot::Occlusion:
+          materialDraft.textures.occlusion = materialPick.path;
+          break;
+        case MaterialTextureSlot::Emissive:
+          materialDraft.textures.emissive = materialPick.path;
+          break;
+      }
+      materialDirty = true;
+      return true;
+    };
+
     ImGui::Text("ID: %u", selected->getId());
     char nameBuf[128];
     std::snprintf(nameBuf, sizeof(nameBuf), "%s", selected->name.c_str());
-    if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
+    if (ImGui::InputText("Name##Object", nameBuf, sizeof(nameBuf))) {
       selected->name = nameBuf;
     }
     if (ImGui::IsItemActivated()) {
@@ -126,6 +264,9 @@ namespace lve::editor {
       }
     }
     ImGui::Text("Type: %s", typeLabel(*selected));
+    if (selected->model && !selected->isSprite && !selected->pointLight) {
+      ImGui::Text("Material: %s", selected->materialPath.empty() ? "-" : selected->materialPath.c_str());
+    }
     ImGui::Separator();
 
     // Transform
@@ -365,6 +506,194 @@ namespace lve::editor {
     }
 
     if (selected->model && !selected->isSprite && !selected->pointLight) {
+      const std::string defaultMaterialPath =
+        "Assets/materials/Material_" + std::to_string(selected->getId()) + ".mat";
+      if (lastMaterialOwnerId != selected->getId() ||
+          lastMaterialPath != selected->materialPath ||
+          lastMaterialPtr != selected->material.get()) {
+        refreshMaterialDraft(defaultMaterialPath);
+      }
+      bool materialChangedThisFrame = applyMaterialPick();
+      const float previewSize = 64.0f;
+
+      ImGui::Separator();
+      ImGui::Text("Material");
+      if (materialDirty) {
+        ImGui::TextColored(ImVec4(1.f, 0.7f, 0.2f, 1.f), "Unsaved changes");
+      }
+
+      char pathBuf[256];
+      std::snprintf(pathBuf, sizeof(pathBuf), "%s", materialDraftPath.c_str());
+      if (ImGui::InputText("Material Path", pathBuf, sizeof(pathBuf))) {
+        materialDraftPath = pathBuf;
+      }
+
+      char nameBuf[128];
+      std::snprintf(nameBuf, sizeof(nameBuf), "%s", materialDraft.name.c_str());
+      if (ImGui::InputText("Name##Material", nameBuf, sizeof(nameBuf))) {
+        materialDraft.name = nameBuf;
+        materialDirty = true;
+      }
+
+      if (ImGui::ColorEdit4("Base Color", &materialDraft.factors.baseColor.x)) {
+        materialDirty = true;
+        materialChangedThisFrame = true;
+      }
+      if (ImGui::SliderFloat("Metallic", &materialDraft.factors.metallic, 0.f, 1.f)) {
+        materialDirty = true;
+        materialChangedThisFrame = true;
+      }
+      if (ImGui::SliderFloat("Roughness", &materialDraft.factors.roughness, 0.f, 1.f)) {
+        materialDirty = true;
+        materialChangedThisFrame = true;
+      }
+      if (ImGui::ColorEdit3("Emissive", &materialDraft.factors.emissive.x)) {
+        materialDirty = true;
+        materialChangedThisFrame = true;
+      }
+      if (ImGui::SliderFloat("Occlusion", &materialDraft.factors.occlusionStrength, 0.f, 1.f)) {
+        materialDirty = true;
+        materialChangedThisFrame = true;
+      }
+      if (ImGui::SliderFloat("Normal Scale", &materialDraft.factors.normalScale, 0.f, 2.f)) {
+        materialDirty = true;
+        materialChangedThisFrame = true;
+      }
+
+      ImGui::Checkbox("Auto Preview", &autoPreview);
+
+      auto editTexturePath = [&](const char *label,
+                                 MaterialTextureSlot slot,
+                                 std::string &value,
+                                 const std::shared_ptr<LveTexture> &previewTexture,
+                                 TexturePreviewCache &cache) {
+        bool changed = false;
+        ImGui::PushID(label);
+        ImGui::TextUnformatted(label);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-140.0f);
+        char buf[256];
+        std::snprintf(buf, sizeof(buf), "%s", value.c_str());
+        if (ImGui::InputText("##path", buf, sizeof(buf))) {
+          value = buf;
+          materialDirty = true;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+          changed = true;
+        }
+        if (ImGui::BeginDragDropTarget()) {
+          if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+            if (payload->Data && payload->DataSize > 0) {
+              std::string dropped(static_cast<const char *>(payload->Data));
+              if (isTextureFile(dropped)) {
+                value = dropped;
+                materialDirty = true;
+                changed = true;
+              }
+            }
+          }
+          ImGui::EndDragDropTarget();
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Pick")) {
+          actions.materialPickRequested = true;
+          actions.materialPickSlot = slot;
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Clear")) {
+          value.clear();
+          materialDirty = true;
+          changed = true;
+        }
+        if (previewTexture) {
+          ImTextureID previewId = getPreviewTextureId(previewTexture, cache);
+          if (previewId) {
+            ImVec2 size = calcPreviewSize(previewTexture, previewSize);
+            ImGui::Spacing();
+            ImGui::Image(previewId, size);
+            const VkExtent3D extent = previewTexture->getExtent();
+            if (extent.width > 0 && extent.height > 0) {
+              ImGui::TextDisabled("%ux%u", extent.width, extent.height);
+            }
+          }
+        } else {
+          ImGui::Spacing();
+          ImGui::TextDisabled("No preview");
+        }
+        if (!value.empty()) {
+          std::error_code ec;
+          if (!std::filesystem::exists(value, ec)) {
+            ImGui::TextColored(ImVec4(1.f, 0.4f, 0.4f, 1.f), "Missing file");
+          }
+        }
+        ImGui::PopID();
+        return changed;
+      };
+
+      const std::shared_ptr<LveTexture> baseColorTex =
+        selected->material ? selected->material->getBaseColorTexture() : nullptr;
+      const std::shared_ptr<LveTexture> normalTex =
+        selected->material ? selected->material->getNormalTexture() : nullptr;
+      const std::shared_ptr<LveTexture> metallicTex =
+        selected->material ? selected->material->getMetallicRoughnessTexture() : nullptr;
+      const std::shared_ptr<LveTexture> occlusionTex =
+        selected->material ? selected->material->getOcclusionTexture() : nullptr;
+      const std::shared_ptr<LveTexture> emissiveTex =
+        selected->material ? selected->material->getEmissiveTexture() : nullptr;
+
+      if (editTexturePath("Base Color Tex", MaterialTextureSlot::BaseColor, materialDraft.textures.baseColor, baseColorTex, baseColorPreview)) {
+        materialChangedThisFrame = true;
+      }
+      if (editTexturePath("Normal Tex", MaterialTextureSlot::Normal, materialDraft.textures.normal, normalTex, normalPreview)) {
+        materialChangedThisFrame = true;
+      }
+      if (editTexturePath("Metallic/Roughness Tex", MaterialTextureSlot::MetallicRoughness, materialDraft.textures.metallicRoughness, metallicTex, metallicPreview)) {
+        materialChangedThisFrame = true;
+      }
+      if (editTexturePath("Occlusion Tex", MaterialTextureSlot::Occlusion, materialDraft.textures.occlusion, occlusionTex, occlusionPreview)) {
+        materialChangedThisFrame = true;
+      }
+      if (editTexturePath("Emissive Tex", MaterialTextureSlot::Emissive, materialDraft.textures.emissive, emissiveTex, emissivePreview)) {
+        materialChangedThisFrame = true;
+      }
+
+      ImGui::Spacing();
+      ImGui::BeginDisabled(materialDraftPath.empty());
+      if (ImGui::Button("Apply Path")) {
+        actions.materialLoadRequested = true;
+        actions.materialPath = materialDraftPath;
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Save Material")) {
+        actions.materialSaveRequested = true;
+        actions.materialPath = materialDraftPath;
+        actions.materialData = materialDraft;
+        materialDirty = false;
+      }
+      if (!autoPreview) {
+        ImGui::SameLine();
+        if (ImGui::Button("Preview")) {
+          actions.materialPreviewRequested = true;
+          actions.materialPath = materialDraftPath;
+          actions.materialData = materialDraft;
+        }
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Revert")) {
+        refreshMaterialDraft(defaultMaterialPath);
+      }
+      ImGui::EndDisabled();
+      ImGui::SameLine();
+      if (ImGui::Button("Clear Material")) {
+        actions.materialClearRequested = true;
+      }
+
+      if (autoPreview && materialChangedThisFrame && !materialDraftPath.empty()) {
+        actions.materialPreviewRequested = true;
+        actions.materialPath = materialDraftPath;
+        actions.materialData = materialDraft;
+      }
+
       ImGui::Separator();
       ImGui::Text("Mesh Nodes");
       const auto &nodes = selected->model->getNodes();

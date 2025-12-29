@@ -85,6 +85,11 @@ namespace lve {
     const editor::EditorHistory &getHistory() const { return history; }
 
   private:
+    enum class FileDialogPurpose {
+      Import,
+      MaterialTexture
+    };
+
     struct ImportOptionsState {
       bool show{false};
       bool openRequested{false};
@@ -106,10 +111,13 @@ namespace lve {
     bool showInspector{true};
     bool showResourceBrowser{true};
     bool showFileDialog{false};
+    FileDialogPurpose fileDialogPurpose{FileDialogPurpose::Import};
     ImportOptionsState importOptions;
     bool showSceneView{true};
     bool showGameView{true};
     editor::FileDialogState fileDialogState;
+    editor::MaterialPickResult pendingMaterialPick{};
+    editor::MaterialTextureSlot pendingMaterialPickSlot{editor::MaterialTextureSlot::BaseColor};
   };
 
 } // namespace lve

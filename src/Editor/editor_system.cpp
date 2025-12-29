@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -31,6 +32,7 @@ namespace lve {
       std::string spriteMetaPath{};
       std::string spriteStateName{};
       std::string modelPath{};
+      std::string materialPath{};
       std::vector<NodeTransformOverride> nodeOverrides{};
       std::string name{};
     };
@@ -47,6 +49,7 @@ namespace lve {
       snapshot.spriteMetaPath = obj.spriteMetaPath;
       snapshot.spriteStateName = obj.spriteStateName;
       snapshot.modelPath = obj.modelPath;
+      snapshot.materialPath = obj.materialPath;
       snapshot.nodeOverrides = obj.nodeOverrides;
       snapshot.name = obj.name;
       if (obj.pointLight) {
@@ -100,6 +103,9 @@ namespace lve {
       obj.transform.rotation = snapshot.transform.rotation;
       obj.transform.scale = snapshot.transform.scale;
       obj.name = snapshot.name;
+      if (!snapshot.materialPath.empty()) {
+        sceneSystem.applyMaterialToObject(obj, snapshot.materialPath);
+      }
       if (!snapshot.nodeOverrides.empty()) {
         sceneSystem.ensureNodeOverrides(obj);
         obj.nodeOverrides = snapshot.nodeOverrides;
@@ -134,12 +140,17 @@ namespace lve {
       return hasExtension(path, {".json"});
     }
 
+    bool isMaterialFile(const fs::path &path) {
+      return hasExtension(path, {".mat"});
+    }
+
     bool isTextureFile(const fs::path &path) {
       return hasExtension(path, {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr", ".tiff", ".ktx", ".ktx2"});
     }
 
     std::string pickImportSubdir(const fs::path &path) {
       if (isMeshFile(path)) return "models";
+      if (isMaterialFile(path)) return "materials";
       if (isTextureFile(path) || isSpriteMetaFile(path)) return "textures";
       return "imported";
     }
@@ -182,6 +193,125 @@ namespace lve {
       fs::copy_file(source, destPath, fs::copy_options::none, ec);
       if (ec) {
         outError = "Copy failed";
+        return false;
+      }
+      outPath = destPath;
+      return true;
+    }
+
+    fs::path normalizePath(const fs::path &path) {
+      std::error_code ec;
+      fs::path normalized = fs::weakly_canonical(path, ec);
+      if (ec) {
+        normalized = path.lexically_normal();
+      }
+      return normalized;
+    }
+
+    bool isSubPath(const fs::path &path, const fs::path &base) {
+      auto pathIt = path.begin();
+      auto baseIt = base.begin();
+      for (; baseIt != base.end(); ++baseIt, ++pathIt) {
+        if (pathIt == path.end()) return false;
+        if (*pathIt != *baseIt) return false;
+      }
+      return true;
+    }
+
+    std::string toAssetPath(const std::string &path, const std::string &root) {
+      if (path.empty()) return {};
+      fs::path inputPath(path);
+      if (!inputPath.is_absolute()) {
+        return inputPath.generic_string();
+      }
+      fs::path rootPath = root.empty() ? fs::path("Assets") : fs::path(root);
+      const fs::path normalizedRoot = normalizePath(rootPath);
+      const fs::path normalizedInput = normalizePath(inputPath);
+      if (isSubPath(normalizedInput, normalizedRoot)) {
+        std::error_code ec;
+        fs::path rel = fs::relative(normalizedInput, normalizedRoot, ec);
+        if (!ec) {
+          return (rootPath / rel).generic_string();
+        }
+      }
+      return inputPath.generic_string();
+    }
+
+    bool createMaterialInstance(
+      SceneSystem &sceneSystem,
+      const std::string &sourcePath,
+      const LveModel *model,
+      LveGameObject::id_t objectId,
+      const std::string &root,
+      std::string &outPath,
+      std::string &outError) {
+      MaterialData data{};
+      if (!sourcePath.empty()) {
+        auto material = sceneSystem.loadMaterialCached(sourcePath);
+        if (material) {
+          data = material->getData();
+        }
+      }
+      if (data.name.empty()) {
+        data.name = "Material_" + std::to_string(objectId);
+      }
+      if (data.textures.baseColor.empty() && model) {
+        std::string diffusePath;
+        const auto &subMeshes = model->getSubMeshes();
+        for (const auto &subMesh : subMeshes) {
+          diffusePath = model->getDiffusePathForSubMesh(subMesh);
+          if (!diffusePath.empty()) {
+            break;
+          }
+        }
+        if (diffusePath.empty()) {
+          const auto &infos = model->getMaterialPathInfo();
+          for (std::size_t i = 0; i < infos.size(); ++i) {
+            diffusePath = model->getDiffusePathForMaterialIndex(static_cast<int>(i));
+            if (!diffusePath.empty()) {
+              break;
+            }
+          }
+        }
+        if (!diffusePath.empty()) {
+          data.textures.baseColor = toAssetPath(diffusePath, root);
+        }
+      }
+
+      fs::path rootPath = root.empty() ? fs::path("Assets") : fs::path(root);
+      fs::path targetDir = rootPath / "materials";
+      fs::path targetPath = makeUniquePath(targetDir / (data.name + ".mat"));
+      std::string error;
+      if (!LveMaterial::saveToFile(targetPath.generic_string(), data, &error)) {
+        outError = error.empty() ? "Failed to save material instance" : error;
+        return false;
+      }
+      outPath = targetPath.generic_string();
+      sceneSystem.getAssetDatabase().registerAsset(outPath);
+      return true;
+    }
+
+    bool createLinkStub(
+      const fs::path &source,
+      const std::string &root,
+      fs::path &outPath,
+      std::string &outError) {
+      std::error_code ec;
+      if (!fs::exists(source, ec) || fs::is_directory(source, ec)) {
+        outError = "Source file not found";
+        return false;
+      }
+      fs::path rootPath = root.empty() ? fs::path("Assets") : fs::path(root);
+      fs::path targetDir = rootPath / "links";
+      fs::create_directories(targetDir, ec);
+      if (ec) {
+        outError = "Failed to create link directory";
+        return false;
+      }
+      fs::path destPath = makeUniquePath(targetDir / source.filename());
+      std::ofstream file(destPath, std::ios::out | std::ios::binary | std::ios::trunc);
+      if (!file) {
+        outError = "Failed to create link stub";
         return false;
       }
       outPath = destPath;
@@ -383,6 +513,7 @@ namespace lve {
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Import")) {
+          fileDialogPurpose = FileDialogPurpose::Import;
           showFileDialog = true;
           fileDialogState.title = "Import";
           fileDialogState.okLabel = "Open";
@@ -545,6 +676,7 @@ namespace lve {
     }
 
     if (showInspector) {
+      const editor::MaterialPickResult materialPick = pendingMaterialPick;
       result.inspectorActions = editor::BuildInspectorPanel(
         result.selectedObject,
         animator,
@@ -555,7 +687,11 @@ namespace lve {
         gizmoContext,
         gizmoOperation,
         gizmoMode,
-        hierarchyState.selectedNodeIndex);
+        hierarchyState.selectedNodeIndex,
+        materialPick);
+      if (materialPick.available) {
+        pendingMaterialPick.available = false;
+      }
     }
 
     if (showResourceBrowser) {
@@ -567,11 +703,21 @@ namespace lve {
     }
 
     if (result.fileDialogActions.accepted) {
-      importOptions.pendingPath = result.fileDialogActions.selectedPath;
-      importOptions.error.clear();
-      importOptions.mode = 0;
-      importOptions.show = true;
-      importOptions.openRequested = true;
+      if (fileDialogPurpose == FileDialogPurpose::Import) {
+        importOptions.pendingPath = result.fileDialogActions.selectedPath;
+        importOptions.error.clear();
+        importOptions.mode = 0;
+        importOptions.show = true;
+        importOptions.openRequested = true;
+      } else if (fileDialogPurpose == FileDialogPurpose::MaterialTexture) {
+        const std::string rootPath = resourceBrowserState.browser.rootPath.empty()
+          ? "Assets"
+          : resourceBrowserState.browser.rootPath;
+        pendingMaterialPick.available = true;
+        pendingMaterialPick.slot = pendingMaterialPickSlot;
+        pendingMaterialPick.path = toAssetPath(result.fileDialogActions.selectedPath, rootPath);
+      }
+      fileDialogPurpose = FileDialogPurpose::Import;
     }
 
     if (importOptions.openRequested) {
@@ -592,12 +738,15 @@ namespace lve {
         }
 
         std::string previewTarget = "-";
-        if (importOptions.mode == 1) {
-          const fs::path srcPath = importOptions.pendingPath;
-          const std::string root = resourceBrowserState.browser.rootPath.empty()
-            ? "Assets"
-            : resourceBrowserState.browser.rootPath;
-          const fs::path targetDir = fs::path(root) / pickImportSubdir(srcPath);
+        const fs::path srcPath = importOptions.pendingPath;
+        const std::string root = resourceBrowserState.browser.rootPath.empty()
+          ? "Assets"
+          : resourceBrowserState.browser.rootPath;
+        if (!importOptions.pendingPath.empty()) {
+          fs::path targetDir = fs::path(root) / "links";
+          if (importOptions.mode == 1) {
+            targetDir = fs::path(root) / pickImportSubdir(srcPath);
+          }
           previewTarget = (targetDir / srcPath.filename()).generic_string();
         }
 
@@ -624,15 +773,25 @@ namespace lve {
           importOptions.error.clear();
           const fs::path sourcePath = importOptions.pendingPath;
           std::string finalPath = sourcePath.generic_string();
-          fs::path copiedPath;
+          fs::path importedPath;
 
           if (importOptions.mode == 1) {
-            if (!copyIntoAssets(sourcePath, resourceBrowserState.browser.rootPath, copiedPath, importOptions.error)) {
+            if (!copyIntoAssets(sourcePath, resourceBrowserState.browser.rootPath, importedPath, importOptions.error)) {
               doImport = false;
             } else {
-              finalPath = copiedPath.generic_string();
-              resourceBrowserState.browser.currentPath = copiedPath.parent_path().generic_string();
+              finalPath = importedPath.generic_string();
+              resourceBrowserState.browser.currentPath = importedPath.parent_path().generic_string();
               resourceBrowserState.browser.pendingRefresh = true;
+              sceneSystem.getAssetDatabase().registerAsset(finalPath);
+            }
+          } else {
+            if (!createLinkStub(sourcePath, resourceBrowserState.browser.rootPath, importedPath, importOptions.error)) {
+              doImport = false;
+            } else {
+              finalPath = importedPath.generic_string();
+              resourceBrowserState.browser.currentPath = importedPath.parent_path().generic_string();
+              resourceBrowserState.browser.pendingRefresh = true;
+              sceneSystem.getAssetDatabase().registerAsset(finalPath, sourcePath.generic_string());
             }
           }
 
@@ -641,6 +800,8 @@ namespace lve {
               resourceBrowserState.activeMeshPath = finalPath;
             } else if (isSpriteMetaFile(finalPath)) {
               resourceBrowserState.activeSpriteMetaPath = finalPath;
+            } else if (isMaterialFile(finalPath)) {
+              resourceBrowserState.activeMaterialPath = finalPath;
             }
             popupOpen = false;
             ImGui::CloseCurrentPopup();
@@ -750,6 +911,11 @@ namespace lve {
       }
     }
 
+    if (result.resourceActions.setActiveMaterial &&
+        !resourceBrowserState.activeMaterialPath.empty()) {
+      sceneSystem.loadMaterialCached(resourceBrowserState.activeMaterialPath);
+    }
+
     if (result.resourceActions.applySpriteMetaToSelection &&
         result.selectedObject &&
         result.selectedObject->isSprite) {
@@ -777,8 +943,89 @@ namespace lve {
         result.selectedObject->subMeshDescriptors.clear();
         sceneSystem.ensureNodeOverrides(*result.selectedObject);
         hierarchyState.selectedNodeIndex = -1;
+        if (!result.selectedObject->materialPath.empty()) {
+          sceneSystem.applyMaterialToObject(*result.selectedObject, result.selectedObject->materialPath);
+        }
       } catch (const std::exception &e) {
         std::cerr << "Failed to load mesh " << meshPath << ": " << e.what() << "\n";
+      }
+    }
+
+    if (result.resourceActions.applyMaterialToSelection &&
+        result.selectedObject &&
+        result.selectedObject->model) {
+      if (!sceneSystem.applyMaterialToObject(*result.selectedObject, resourceBrowserState.activeMaterialPath)) {
+        std::cerr << "Failed to apply material " << resourceBrowserState.activeMaterialPath << "\n";
+      }
+    }
+
+    if (result.inspectorActions.materialPreviewRequested &&
+        result.selectedObject &&
+        result.selectedObject->model) {
+      const std::string &path = result.inspectorActions.materialPath;
+      if (!path.empty()) {
+        sceneSystem.updateMaterialFromData(path, result.inspectorActions.materialData);
+        if (!sceneSystem.applyMaterialToObject(*result.selectedObject, path)) {
+          std::cerr << "Failed to apply material " << path << "\n";
+        } else {
+          resourceBrowserState.activeMaterialPath = path;
+        }
+      }
+    }
+
+    if (result.inspectorActions.materialPickRequested) {
+      fileDialogPurpose = FileDialogPurpose::MaterialTexture;
+      pendingMaterialPickSlot = result.inspectorActions.materialPickSlot;
+      showFileDialog = true;
+      fileDialogState.title = "Select Texture";
+      fileDialogState.okLabel = "Select";
+      fileDialogState.allowDirectories = false;
+      fileDialogState.browser.restrictToRoot = true;
+      fileDialogState.browser.filter.clear();
+      const std::string rootPath = resourceBrowserState.browser.rootPath.empty()
+        ? "Assets"
+        : resourceBrowserState.browser.rootPath;
+      fileDialogState.browser.rootPath = rootPath;
+      fileDialogState.browser.currentPath = rootPath;
+      fileDialogState.browser.pendingRefresh = true;
+    }
+
+    if (result.inspectorActions.materialClearRequested &&
+        result.selectedObject &&
+        result.selectedObject->model) {
+      sceneSystem.applyMaterialToObject(*result.selectedObject, {});
+    }
+
+    if (result.inspectorActions.materialLoadRequested &&
+        result.selectedObject &&
+        result.selectedObject->model) {
+      const std::string &path = result.inspectorActions.materialPath;
+      if (!sceneSystem.applyMaterialToObject(*result.selectedObject, path)) {
+        std::cerr << "Failed to apply material " << path << "\n";
+      } else {
+        resourceBrowserState.activeMaterialPath = path;
+      }
+    }
+
+    if (result.inspectorActions.materialSaveRequested &&
+        result.selectedObject &&
+        result.selectedObject->model) {
+      const std::string &path = result.inspectorActions.materialPath;
+      std::string error;
+      if (!LveMaterial::saveToFile(path, result.inspectorActions.materialData, &error)) {
+        std::cerr << "Failed to save material " << path;
+        if (!error.empty()) {
+          std::cerr << ": " << error;
+        }
+        std::cerr << "\n";
+      } else {
+        sceneSystem.getAssetDatabase().registerAsset(path);
+        sceneSystem.updateMaterialFromData(path, result.inspectorActions.materialData);
+        if (!sceneSystem.applyMaterialToObject(*result.selectedObject, path)) {
+          std::cerr << "Failed to apply material " << path << "\n";
+        } else {
+          resourceBrowserState.activeMaterialPath = path;
+        }
       }
     }
 
@@ -945,6 +1192,33 @@ namespace lve {
         auto &obj = sceneSystem.createMeshObject(spawnPos, meshPathForNew);
         setSelectedId(obj.getId());
         obj.transformDirty = true;
+        {
+          std::string instancePath;
+          std::string error;
+          const std::string rootPath = resourceBrowserState.browser.rootPath.empty()
+            ? "Assets"
+            : resourceBrowserState.browser.rootPath;
+          const std::string sourceMaterial = resourceBrowserState.activeMaterialPath;
+          if (createMaterialInstance(
+                sceneSystem,
+                sourceMaterial,
+                obj.model.get(),
+                obj.getId(),
+                rootPath,
+                instancePath,
+                error)) {
+            if (!sceneSystem.applyMaterialToObject(obj, instancePath)) {
+              std::cerr << "Failed to apply material " << instancePath << "\n";
+            }
+          } else {
+            if (!error.empty()) {
+              std::cerr << "Failed to create material instance: " << error << "\n";
+            }
+            if (!sourceMaterial.empty()) {
+              sceneSystem.applyMaterialToObject(obj, sourceMaterial);
+            }
+          }
+        }
         if (!historyTriggered) {
           const GameObjectSnapshot snapshot = captureSnapshot(obj);
           history.push({

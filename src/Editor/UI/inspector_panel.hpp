@@ -23,6 +23,14 @@ namespace lve::editor {
     glm::vec3 scale{1.f};
   };
 
+  enum class MaterialTextureSlot {
+    BaseColor,
+    Normal,
+    MetallicRoughness,
+    Occlusion,
+    Emissive
+  };
+
   struct InspectorActions {
     bool transformChanged{false};
     bool transformCommitted{false};
@@ -35,6 +43,20 @@ namespace lve::editor {
     bool nodeOverridesCommitted{false};
     std::vector<NodeTransformOverride> beforeNodeOverrides{};
     std::vector<NodeTransformOverride> afterNodeOverrides{};
+    bool materialSaveRequested{false};
+    bool materialLoadRequested{false};
+    bool materialClearRequested{false};
+    std::string materialPath{};
+    MaterialData materialData{};
+    bool materialPickRequested{false};
+    MaterialTextureSlot materialPickSlot{MaterialTextureSlot::BaseColor};
+    bool materialPreviewRequested{false};
+  };
+
+  struct MaterialPickResult {
+    bool available{false};
+    MaterialTextureSlot slot{MaterialTextureSlot::BaseColor};
+    std::string path{};
   };
 
   InspectorActions BuildInspectorPanel(
@@ -47,6 +69,7 @@ namespace lve::editor {
     const GizmoContext &gizmoContext,
     int gizmoOperation,
     int gizmoMode,
-    int &selectedNodeIndex);
+    int &selectedNodeIndex,
+    const MaterialPickResult &materialPick);
 
 } // namespace lve::editor

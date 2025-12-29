@@ -23,6 +23,7 @@ namespace lve::editor {
     BrowserState browser{};
     std::string activeMeshPath{"Assets/models/colored_cube.obj"};
     std::string activeSpriteMetaPath{"Assets/textures/characters/player.json"};
+    std::string activeMaterialPath{};
   };
 
   struct FileDialogState {
@@ -36,8 +37,10 @@ namespace lve::editor {
     bool refreshRequested{false};
     bool setActiveMesh{false};
     bool setActiveSpriteMeta{false};
+    bool setActiveMaterial{false};
     bool applyMeshToSelection{false};
     bool applySpriteMetaToSelection{false};
+    bool applyMaterialToSelection{false};
   };
 
   struct FileDialogActions {

@@ -27,6 +27,7 @@ layout(push_constant) uniform Push {
   mat4 modelMatrix;
   ivec4 flags0; // useTexture, currentFrame, objectState, direction
   ivec4 flags1; // debugView, padding
+  vec4 baseColor;
 } push;
 
 void main() {
@@ -77,13 +78,13 @@ void main() {
     animatedUv.x = 1.0 - animatedUv.x;
   }
 
-  vec3 color = fragColor;
+  vec3 color = fragColor * push.baseColor.rgb;
   vec4 sampledColor = texture(diffuseMap, animatedUv);
   if (push.flags0.x == 1) {
-    color = sampledColor.xyz;
+    color = sampledColor.xyz * push.baseColor.rgb;
   }
   
-  outColor = vec4(diffuseLight * color + specularLight * fragColor, 1.0);
+  outColor = vec4(diffuseLight * color + specularLight * push.baseColor.rgb, 1.0);
 
   if (sampledColor.a < 0.1) {
     discard;
