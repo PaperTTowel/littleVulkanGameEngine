@@ -214,7 +214,6 @@ namespace lve {
   LveGameObject::LveGameObject(id_t objId, const LveGameObjectManager &manager)
     : id{objId}, gameObjectManager{manager} {}
 
-  // ??삵닏??븍뱜 ?袁⑥쟿????낅쑓??꾨뱜
   void LveGameObjectManager::updateFrame(
     LveGameObject &character,
     int maxFrames,
