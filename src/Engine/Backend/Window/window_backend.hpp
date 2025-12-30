@@ -1,12 +1,12 @@
 #pragma once
 
 #include "Engine/Backend/runtime_window.hpp"
-#include "Engine/Backend/Vulkan/Core/vulkan_input.hpp"
+#include "Engine/Backend/Window/glfw_input.hpp"
 
 namespace lve::backend {
-  class VulkanWindowBackend final : public WindowBackend {
+  class GlfwWindowBackend final : public WindowBackend {
   public:
-    VulkanWindowBackend(LveWindow &window, VulkanInputProvider &inputProvider)
+    GlfwWindowBackend(LveWindow &window, GlfwInputProvider &inputProvider)
       : window{window}, inputProvider{inputProvider} {}
 
     void pollEvents() override;
@@ -17,6 +17,6 @@ namespace lve::backend {
 
   private:
     LveWindow &window;
-    VulkanInputProvider &inputProvider;
+    GlfwInputProvider &inputProvider;
   };
 } // namespace lve::backend

@@ -6,7 +6,7 @@
 namespace lve::backend {
 
   VulkanRuntimeBackend::VulkanRuntimeBackend(int width, int height, std::string title)
-    : windowImpl{width, height, std::move(title)}
+    : windowImpl{width, height, std::move(title), WindowClientApi::Vulkan}
     , inputProvider{windowImpl}
     , windowBackend{windowImpl, inputProvider}
     , device{windowImpl}

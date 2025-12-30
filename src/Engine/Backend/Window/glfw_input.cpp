@@ -1,8 +1,7 @@
-#include "Engine/Backend/Vulkan/Core/vulkan_input.hpp"
+#include "Engine/Backend/Window/glfw_input.hpp"
 
 namespace lve::backend {
-
-  int VulkanInputProvider::toGlfwKey(KeyCode code) {
+  int GlfwInputProvider::toGlfwKey(KeyCode code) {
     switch (code) {
       case KeyCode::A: return GLFW_KEY_A;
       case KeyCode::D: return GLFW_KEY_D;
@@ -22,12 +21,11 @@ namespace lve::backend {
     return GLFW_KEY_UNKNOWN;
   }
 
-  bool VulkanInputProvider::isKeyPressed(KeyCode code) const {
+  bool GlfwInputProvider::isKeyPressed(KeyCode code) const {
     const int key = toGlfwKey(code);
     if (key == GLFW_KEY_UNKNOWN) {
       return false;
     }
     return glfwGetKey(window.getGLFWwindow(), key) == GLFW_PRESS;
   }
-
 } // namespace lve::backend

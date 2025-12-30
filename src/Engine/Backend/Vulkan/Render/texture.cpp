@@ -1,21 +1,9 @@
 #include "texture.hpp"
 
-// libs
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-
 // std
-#include <cmath>
 #include <stdexcept>
 
 namespace lve {
-LveTexture::LveTexture(LveDevice &device, const std::string &textureFilepath) : mDevice{device} {
-  createTextureImage(textureFilepath);
-  createTextureImageView(VK_IMAGE_VIEW_TYPE_2D);
-  createTextureSampler();
-  updateDescriptor();
-}
-
 LveTexture::LveTexture(LveDevice &device, const unsigned char *rgbaPixels, int width, int height)
     : mDevice{device} {
   createTextureImageFromPixels(rgbaPixels, width, height);
@@ -116,31 +104,6 @@ LveTexture::~LveTexture() {
   vkFreeMemory(mDevice.device(), mTextureImageMemory, nullptr);
 }
 
-std::unique_ptr<LveTexture> LveTexture::createTextureFromFile(
-    LveDevice &device, const std::string &filepath) {
-  return std::make_unique<LveTexture>(device, filepath);
-}
-
-std::unique_ptr<LveTexture> LveTexture::createTextureFromMemory(
-    LveDevice &device, const unsigned char *data, std::size_t size) {
-  int texWidth = 0;
-  int texHeight = 0;
-  int texChannels = 0;
-  stbi_uc *pixels = stbi_load_from_memory(
-      data,
-      static_cast<int>(size),
-      &texWidth,
-      &texHeight,
-      &texChannels,
-      STBI_rgb_alpha);
-  if (!pixels) {
-    throw std::runtime_error("failed to load texture from memory!");
-  }
-  auto texture = std::make_unique<LveTexture>(device, pixels, texWidth, texHeight);
-  stbi_image_free(pixels);
-  return texture;
-}
-
 std::unique_ptr<LveTexture> LveTexture::createTextureFromRgba(
     LveDevice &device, const unsigned char *rgbaPixels, int width, int height) {
   return std::make_unique<LveTexture>(device, rgbaPixels, width, height);
@@ -150,18 +113,6 @@ void LveTexture::updateDescriptor() {
   mDescriptor.sampler = mTextureSampler;
   mDescriptor.imageView = mTextureImageView;
   mDescriptor.imageLayout = mTextureLayout;
-}
-
-void LveTexture::createTextureImage(const std::string &filepath) {
-  int texWidth, texHeight, texChannels;
-  stbi_set_flip_vertically_on_load(1);
-  stbi_uc *pixels =
-      stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-  if (!pixels) {
-    throw std::runtime_error("failed to load texture image!");
-  }
-  createTextureImageFromPixels(pixels, texWidth, texHeight);
-  stbi_image_free(pixels);
 }
 
 void LveTexture::createTextureImageFromPixels(const unsigned char *pixels, int texWidth, int texHeight) {

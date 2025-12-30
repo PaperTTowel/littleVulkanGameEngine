@@ -2,8 +2,8 @@
 
 #include "Engine/Backend/runtime_backend.hpp"
 #include "Engine/Backend/Vulkan/Core/device.hpp"
-#include "Engine/Backend/Vulkan/Core/vulkan_input.hpp"
-#include "Engine/Backend/Vulkan/Core/window_backend.hpp"
+#include "Engine/Backend/Window/glfw_input.hpp"
+#include "Engine/Backend/Window/window_backend.hpp"
 #include "Engine/Backend/Vulkan/Editor/editor_render_backend.hpp"
 #include "Engine/Backend/Vulkan/Render/asset_factory.hpp"
 #include "Engine/Backend/Vulkan/Render/render_backend.hpp"
@@ -24,8 +24,8 @@ namespace lve::backend {
 
   private:
     LveWindow windowImpl;
-    VulkanInputProvider inputProvider;
-    VulkanWindowBackend windowBackend;
+    GlfwInputProvider inputProvider;
+    GlfwWindowBackend windowBackend;
     LveDevice device;
     VulkanRenderAssetFactory assetFactory;
     SceneSystem sceneSystemImpl;

@@ -1,6 +1,7 @@
 #include "Engine/Backend/Vulkan/Editor/editor_render_backend.hpp"
 
 #include "Engine/Backend/Vulkan/Render/texture.hpp"
+#include "Engine/IO/image_io.hpp"
 
 #include <backends/imgui_impl_vulkan.h>
 #include <vulkan/vulkan.h>
@@ -74,10 +75,15 @@ namespace lve::backend {
       return it->second.descriptor;
     }
 
-    auto texture = LveTexture::createTextureFromFile(device, path);
-    if (!texture) {
+    ImageData image{};
+    if (!loadImageDataFromFile(path, image, nullptr)) {
       return nullptr;
     }
+    auto texture = LveTexture::createTextureFromRgba(
+      device,
+      image.pixels.data(),
+      image.width,
+      image.height);
 
     PreviewEntry entry{};
     entry.texture = std::shared_ptr<LveTexture>(std::move(texture));

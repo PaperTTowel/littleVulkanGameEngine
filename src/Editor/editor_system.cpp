@@ -3,7 +3,7 @@
 #include "Editor/History/editor_snapshot.hpp"
 #include "Editor/Tools/editor_picking.hpp"
 #include "Editor/Workflow/editor_import.hpp"
-#include "Engine/material_io.hpp"
+#include "Engine/IO/material_io.hpp"
 #include "Engine/scene_system.hpp"
 
 #include <imgui.h>

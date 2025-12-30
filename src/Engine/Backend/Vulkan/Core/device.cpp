@@ -262,11 +262,10 @@ bool LveDevice::checkValidationLayerSupport() {
 }
 
 std::vector<const char *> LveDevice::getRequiredExtensions() {
-  uint32_t glfwExtensionCount = 0;
-  const char **glfwExtensions;
-  glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-  std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+  std::vector<const char *> extensions = window.getRequiredInstanceExtensions();
+  if (extensions.empty()) {
+    throw std::runtime_error("GLFW did not return required Vulkan instance extensions");
+  }
 
   if (enableValidationLayers) {
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);

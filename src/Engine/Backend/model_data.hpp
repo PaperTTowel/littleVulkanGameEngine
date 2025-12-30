@@ -8,6 +8,17 @@
 
 namespace lve::backend {
 
+  struct ModelVertex {
+    glm::vec3 position{};
+    glm::vec3 color{};
+    glm::vec3 normal{};
+    glm::vec2 uv{};
+
+    bool operator==(const ModelVertex &other) const {
+      return position == other.position && color == other.color && normal == other.normal && uv == other.uv;
+    }
+  };
+
   struct ModelSubMesh {
     std::uint32_t firstIndex{0};
     std::uint32_t indexCount{0};
@@ -49,6 +60,14 @@ namespace lve::backend {
 
     glm::vec3 center() const { return (min + max) * 0.5f; }
     glm::vec3 halfSize() const { return (max - min) * 0.5f; }
+  };
+
+  struct ModelData {
+    std::vector<ModelVertex> vertices{};
+    std::vector<std::uint32_t> indices{};
+    std::vector<ModelSubMesh> subMeshes{};
+    std::vector<ModelNode> nodes{};
+    std::vector<ModelMaterialSource> materials{};
   };
 
 } // namespace lve::backend

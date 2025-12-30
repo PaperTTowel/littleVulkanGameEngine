@@ -7,14 +7,11 @@
 #include <vulkan/vulkan.h>
 
 // std
-#include <cstddef>
 #include <memory>
-#include <string>
 
 namespace lve {
 class LveTexture : public backend::RenderTexture {
  public:
-  LveTexture(LveDevice &device, const std::string &textureFilepath);
   LveTexture(LveDevice &device, const unsigned char *rgbaPixels, int width, int height);
   LveTexture(
       LveDevice &device,
@@ -41,15 +38,10 @@ class LveTexture : public backend::RenderTexture {
   void transitionLayout(
       VkCommandBuffer commandBuffer, VkImageLayout oldLayout, VkImageLayout newLayout);
 
-  static std::unique_ptr<LveTexture> createTextureFromFile(
-      LveDevice &device, const std::string &filepath);
-  static std::unique_ptr<LveTexture> createTextureFromMemory(
-      LveDevice &device, const unsigned char *data, std::size_t size);
   static std::unique_ptr<LveTexture> createTextureFromRgba(
       LveDevice &device, const unsigned char *rgbaPixels, int width, int height);
 
  private:
-  void createTextureImage(const std::string &filepath);
   void createTextureImageFromPixels(const unsigned char *pixels, int texWidth, int texHeight);
   void createTextureImageView(VkImageViewType viewType);
   void createTextureSampler();

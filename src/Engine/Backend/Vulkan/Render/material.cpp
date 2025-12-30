@@ -1,6 +1,7 @@
 #include "Engine/Backend/Vulkan/Render/material.hpp"
 
-#include "Engine/material_io.hpp"
+#include "Engine/IO/image_io.hpp"
+#include "Engine/IO/material_io.hpp"
 
 #include <deque>
 #include <exception>
@@ -15,7 +16,15 @@ namespace lve {
       std::string *outError) {
       if (path.empty()) return {};
       try {
-        auto tex = LveTexture::createTextureFromFile(device, path);
+        ImageData image{};
+        if (!loadImageDataFromFile(path, image, outError)) {
+          return {};
+        }
+        auto tex = LveTexture::createTextureFromRgba(
+          device,
+          image.pixels.data(),
+          image.width,
+          image.height);
         return std::shared_ptr<LveTexture>(std::move(tex));
       } catch (const std::exception &e) {
         if (outError) {

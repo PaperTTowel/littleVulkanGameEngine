@@ -18,16 +18,17 @@ namespace lve {
     auto extent = lveWindow.getExtent();
     while (extent.width == 0 || extent.height == 0) {
       extent = lveWindow.getExtent();
-      glfwWaitEvents();
+      lveWindow.waitEvents();
     }
+    const VkExtent2D swapExtent{extent.width, extent.height};
     vkDeviceWaitIdle(lveDevice.device());
     swapChainRecreated = true;
 
     if (lveSwapChain == nullptr) {
-      lveSwapChain = std::make_unique<LveSwapChain>(lveDevice, extent);
+      lveSwapChain = std::make_unique<LveSwapChain>(lveDevice, swapExtent);
     } else {
       std::shared_ptr<LveSwapChain> oldSwapChain = std::move(lveSwapChain);
-      lveSwapChain = std::make_unique<LveSwapChain>(lveDevice, extent, oldSwapChain);
+      lveSwapChain = std::make_unique<LveSwapChain>(lveDevice, swapExtent, oldSwapChain);
 
       if (!oldSwapChain->compareSwapFormats(*lveSwapChain.get())) {
         throw std::runtime_error("Swap chain image(or depth) format has changed!");

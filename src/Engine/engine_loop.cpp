@@ -2,7 +2,8 @@
 
 // backend
 #include "camera.hpp"
-#include "Engine/Backend/Vulkan/runtime_backend.hpp"
+#include "Engine/Backend/Factory/runtime_backend_factory.hpp"
+#include "Engine/scene_system.hpp"
 
 // utils
 #include "utils/keyboard_movement_controller.hpp"
@@ -16,13 +17,28 @@
 // std
 #include <chrono>
 #include <iostream>
+#include <stdexcept>
 #include <vector>
 
 namespace lve {
+  namespace {
+    std::unique_ptr<backend::RuntimeBackend> createRuntime() {
+      backend::RuntimeBackendConfig config{};
+      config.api = backend::BackendApi::Vulkan;
+      config.width = EngineLoop::WIDTH;
+      config.height = EngineLoop::HEIGHT;
+      config.title = "PaperTTowelEngine";
+      auto runtimeBackend = backend::createRuntimeBackend(config);
+      if (!runtimeBackend) {
+        throw std::runtime_error("Runtime backend initialization failed.");
+      }
+      return runtimeBackend;
+    }
+  } // namespace
 
   /* Engine bootstrap: initial objects */
   EngineLoop::EngineLoop()
-    : runtime{std::make_unique<backend::VulkanRuntimeBackend>(WIDTH, HEIGHT, "Hello Vulkan!")}
+    : runtime{createRuntime()}
     , editorSystem{std::make_unique<EditorSystem>(runtime->editorBackend())} {
     auto &sceneSystem = runtime->sceneSystem();
     sceneSystem.loadGameObjects();
@@ -211,6 +227,3 @@ namespace lve {
   }
 
 } // namespace lve
-
-
-

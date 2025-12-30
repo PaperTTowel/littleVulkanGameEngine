@@ -27,37 +27,17 @@ namespace lve {
     using Node = backend::ModelNode;
     using BoundingBox = backend::ModelBoundingBox;
 
-    struct Vertex {
-      glm::vec3 position{};
-      glm::vec3 color{};
-      glm::vec3 normal{};
-      glm::vec2 uv{};
-
-      static std::vector<VkVertexInputBindingDescription> getBindingDescriptions();
-      static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions();
-
-      bool operator==(const Vertex &other) const {
-        return position == other.position && color == other.color && normal == other.normal && uv == other.uv;
-      }
-    };
-
-    struct Builder {
-      std::vector<Vertex> vertices{};
-      std::vector<uint32_t> indices{};
-      std::vector<SubMesh> subMeshes{};
-      std::vector<Node> nodes{};
-      std::vector<MaterialSource> materials{};
-
-      void loadModel(const std::string &filepath);
-    };
-
-    LveModel(LveDevice &device, const LveModel::Builder &builder);
+    LveModel(
+      LveDevice &device,
+      const backend::ModelData &data,
+      std::vector<std::shared_ptr<LveTexture>> materialTextures);
     ~LveModel();
 
     LveModel(const LveModel &) = delete;
     LveModel &operator=(const LveModel &) = delete;
 
-    static std::unique_ptr<LveModel> createModelFromFile(LveDevice &device, const std::string &filepath);
+    static std::vector<VkVertexInputBindingDescription> getBindingDescriptions();
+    static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions();
 
     void bind(VkCommandBuffer commandBuffer);
     void draw(VkCommandBuffer commandBuffer);
@@ -77,11 +57,10 @@ namespace lve {
     const BoundingBox &getBoundingBox() const override { return boundingBox; }
 
   private:
-    void createVertexBuffers(const std::vector<Vertex> &vertices);
+    void createVertexBuffers(const std::vector<backend::ModelVertex> &vertices);
     void createIndexBuffers(const std::vector<uint32_t> &indices);
 
-    void calculateBoundingBox(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
-    void loadMaterials(const std::vector<MaterialSource> &materials);
+    void calculateBoundingBox(const std::vector<backend::ModelVertex> &vertices, const std::vector<uint32_t> &indices);
 
     LveDevice &lveDevice;
 

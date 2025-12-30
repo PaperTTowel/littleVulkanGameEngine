@@ -206,8 +206,8 @@ void LvePipeline::defaultPipelineConfigInfo(PipelineConfigInfo& configInfo) {
       static_cast<uint32_t>(configInfo.dynamicStateEnables.size());
   configInfo.dynamicStateInfo.flags = 0;
 
-  configInfo.bindingDescriptions = LveModel::Vertex::getBindingDescriptions();
-  configInfo.attributeDescriptions = LveModel::Vertex::getAttributeDescriptions();
+  configInfo.bindingDescriptions = LveModel::getBindingDescriptions();
+  configInfo.attributeDescriptions = LveModel::getAttributeDescriptions();
 }
 
 void LvePipeline::enableAlphaBlending(PipelineConfigInfo& configInfo){
