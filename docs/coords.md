@@ -1,27 +1,29 @@
-# Engine Coordinate System
+﻿# 엔진 좌표계
 
-This file captures the agreed coordinate conventions so render and physics stay aligned.
+모듈 간 좌표 규칙을 맞추기 위한 요약 문서다.
 
-## World axes
-- +X: right
-- +Y: up
-- +Z: forward (objects/camera look toward +Z) → effectively left-handed (Z-forward).
-- Units: 1.0 = 1 meter (use the same in physics).
+## 월드 축
+- +X: 오른쪽
+- +Y: 위
+- +Z: 전방 (카메라/오브젝트 기본 전방)
+- 오른손 좌표계 (X x Y = Z)
+- 단위는 엔진이 강제하지 않음 (프로젝트 규칙 통일 권장)
 
-## Camera
-- View: `setViewYXZ` uses yaw/pitch around +Z forward.
-- Projection: Vulkan-style perspective (NDC depth 0..1).
-- Default viewer: starts at z = -2.5 looking toward +Z.
+## 카메라
+- View: `setViewYXZ`는 Y(요)/X(피치)/Z(롤) 순서.
+- 기본 회전(0,0,0)에서 +Z를 바라봄.
+- 기본 뷰어 위치: z = -2.5f (엔진 루프 초기값).
+- Projection: Vulkan 스타일 (NDC depth 0..1).
 
-## Textures/UV
-- Images are loaded with `stbi_set_flip_vertically_on_load(1)` so UV (0,0) is bottom-left in shader space.
+## 텍스처/UV
+- 파일 로딩은 기본적으로 세로 플립(`flipVertically=true`).
+- 셰이더 기준 UV (0,0)은 좌하단을 의미.
 
-## Sprites
-- Rendered with alpha blending, depth off; facing +Z (billboard/rotate as needed).
+## 스프라이트
+- 알파 블렌딩 사용.
+- 깊이 테스트/쓰기 비활성화 (투명 영역 오클루전 방지).
 
-## Physics interop (when integrating)
-- Many physics engines use +Y up, but forward = -Z (right-handed). To convert between our world (+Z forward) and a RH -Z world:
-  - Render → Physics: (x, y, -z), quaternion (x, y, -z, w).
-  - Physics → Render: (x, y, -z), quaternion (x, y, -z, w).
-- Keep transforms in meters; apply all axis flips in a single bridge helper to avoid drift.
-
+## 물리 연동(추후)
+- 많은 물리 엔진은 +Y up, -Z forward를 사용함.
+- 현재 좌표계(+Z forward)와 변환이 필요할 수 있음.
+- 변환은 브리지 레이어에서 일괄 처리 권장.
