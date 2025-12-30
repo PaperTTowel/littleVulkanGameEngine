@@ -391,7 +391,7 @@ VkSurfaceFormatKHR LveSwapChain::chooseSwapSurfaceFormat(
 
 VkPresentModeKHR LveSwapChain::chooseSwapPresentMode(
     const std::vector<VkPresentModeKHR> &availablePresentModes) {
-  /* 무제한 프레임
+  /* ?얜똻????袁⑥쟿??
   for (const auto &availablePresentMode : availablePresentModes) {
     if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
       std::cout << "Present mode: Mailbox" << std::endl;

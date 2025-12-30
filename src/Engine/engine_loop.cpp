@@ -1,4 +1,4 @@
-﻿#include "engine_loop.hpp"
+#include "engine_loop.hpp"
 
 // backend
 #include "camera.hpp"

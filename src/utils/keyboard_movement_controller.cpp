@@ -36,9 +36,8 @@ namespace lve {
   }
 
   void CharacterMovementController::moveInPlaneXZ(backend::InputProvider &input, float dt, LveGameObject &character) {
-    // 이동 방향 계산
     float yaw = character.transform.rotation.y;
-    const glm::vec3 forwardDir{cos(yaw), 0.f, sin(yaw)}; // 일부로 바꿈
+    const glm::vec3 forwardDir{cos(yaw), 0.f, sin(yaw)};
     const glm::vec3 rightDir{forwardDir.z, 0.f, -forwardDir.x};
     const glm::vec3 upDir{0.f, -1.f, 0.f};
 

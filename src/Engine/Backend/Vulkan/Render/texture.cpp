@@ -211,7 +211,7 @@ void LveTexture::createTextureImageView(VkImageViewType viewType) {
 void LveTexture::createTextureSampler() {
   VkSamplerCreateInfo samplerInfo{};
   samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-  samplerInfo.magFilter = VK_FILTER_NEAREST; // 텍스쳐 필터(픽셀아트)
+  samplerInfo.magFilter = VK_FILTER_NEAREST; // ??용뮞???袁り숲(????袁る뱜)
   samplerInfo.minFilter = VK_FILTER_NEAREST;
 
   samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;

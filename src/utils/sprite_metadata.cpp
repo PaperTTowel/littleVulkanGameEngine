@@ -7,7 +7,6 @@
 #include <string>
 
 namespace lve {
-  /* 헬퍼 함수 숨기는 용도 (익명 네임스페이스) */
   namespace {
     std::string readFileToString(const std::string &path) {
       std::ifstream file(path, std::ios::in | std::ios::binary);
@@ -87,7 +86,6 @@ namespace lve {
     }
   } // namespace
   
-  /* 캐릭터 상태나 메타데이터를 수정하고 싶으면 이곳을 수정 */
   bool loadSpriteMetadata(const std::string &filepath, SpriteMetadata &outMetadata) {
     const std::string content = readFileToString(filepath);
     if (content.empty()) {
