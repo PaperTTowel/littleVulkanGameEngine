@@ -25,6 +25,8 @@ namespace lve {
     LveGameObject *selectedObject{nullptr};
     bool undoRequested{false};
     bool redoRequested{false};
+    int undoSteps{0};
+    int redoSteps{0};
     ViewportInfo sceneView{};
     ViewportInfo gameView{};
   };
@@ -96,7 +98,10 @@ namespace lve {
     bool showInspector{true};
     bool showResourceBrowser{true};
     bool showFileDialog{false};
+    bool showUndoHistory{false};
     bool showGameViewCameraWarning{true};
+    bool showAboutEnginePopup{false};
+    bool showReportBugPopup{false};
     FileDialogPurpose fileDialogPurpose{FileDialogPurpose::Import};
     ImportOptionsState importOptions;
     bool showSceneView{true};

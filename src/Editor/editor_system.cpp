@@ -149,6 +149,7 @@ namespace lve {
       result.redoRequested = true;
     }
 
+    editor::HierarchyCreateRequest menuCreateRequest = editor::HierarchyCreateRequest::None;
     if (ImGui::BeginMainMenuBar()) {
       if (ImGui::BeginMenu("File")) {
         if (ImGui::MenuItem("Save Scene")) {
@@ -156,24 +157,6 @@ namespace lve {
         }
         if (ImGui::MenuItem("Load Scene")) {
           result.sceneActions.loadRequested = true;
-        }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Import")) {
-          fileDialogPurpose = FileDialogPurpose::Import;
-          showFileDialog = true;
-          fileDialogState.title = "Import";
-          fileDialogState.okLabel = "Open";
-          fileDialogState.allowDirectories = false;
-          fileDialogState.browser.restrictToRoot = false;
-          std::error_code ec;
-          const auto current = std::filesystem::current_path(ec);
-          if (!ec) {
-            fileDialogState.browser.rootPath = current.root_path().generic_string();
-            if (fileDialogState.browser.currentPath.empty()) {
-              fileDialogState.browser.currentPath = current.generic_string();
-            }
-          }
-          fileDialogState.browser.pendingRefresh = true;
         }
         ImGui::EndMenu();
       }
@@ -186,24 +169,93 @@ namespace lve {
         if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) {
           result.redoRequested = true;
         }
+        ImGui::MenuItem("Undo History", nullptr, &showUndoHistory);
         ImGui::EndMenu();
       }
-      if (ImGui::BeginMenu("View")) {
-        ImGui::MenuItem("Engine Stats", nullptr, &showEngineStats);
-        ImGui::MenuItem("Hierarchy", nullptr, &showHierarchy);
-        ImGui::MenuItem("Inspector", nullptr, &showInspector);
-        ImGui::MenuItem("Scene", nullptr, &showScene);
-        ImGui::MenuItem("Resource Browser", nullptr, &showResourceBrowser);
-        ImGui::MenuItem("Scene View", nullptr, &showSceneView);
-        ImGui::MenuItem("Game View", nullptr, &showGameView);
-        ImGui::MenuItem("Game View Camera Warning", nullptr, &showGameViewCameraWarning);
+      if (ImGui::BeginMenu("GameObject")) {
+        if (ImGui::BeginMenu("Create Object")) {
+          if (ImGui::MenuItem("Camera")) {
+            menuCreateRequest = editor::HierarchyCreateRequest::Camera;
+          }
+          ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("2D Object")) {
+          if (ImGui::MenuItem("Sprite")) {
+            menuCreateRequest = editor::HierarchyCreateRequest::Sprite;
+          }
+          ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("3D Object")) {
+          if (ImGui::MenuItem("Mesh")) {
+            menuCreateRequest = editor::HierarchyCreateRequest::Mesh;
+          }
+          ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Light")) {
+          if (ImGui::MenuItem("Point Light")) {
+            menuCreateRequest = editor::HierarchyCreateRequest::PointLight;
+          }
+          ImGui::EndMenu();
+        }
+        ImGui::EndMenu();
+      }
+      if (ImGui::BeginMenu("Window")) {
+        if (ImGui::BeginMenu("Panels")) {
+          ImGui::MenuItem("Engine Stats", nullptr, &showEngineStats);
+          ImGui::MenuItem("Hierarchy", nullptr, &showHierarchy);
+          ImGui::MenuItem("Inspector", nullptr, &showInspector);
+          ImGui::MenuItem("Resource Browser", nullptr, &showResourceBrowser);
+          ImGui::MenuItem("Scene View", nullptr, &showSceneView);
+          ImGui::MenuItem("Game View", nullptr, &showGameView);
+          ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("View")) {
+          ImGui::MenuItem("Scene", nullptr, &showScene);
+          ImGui::MenuItem("Game View Camera Warning", nullptr, &showGameViewCameraWarning);
+          ImGui::EndMenu();
+        }
         ImGui::EndMenu();
       }
       if (ImGui::BeginMenu("Help")) {
-        ImGui::MenuItem("About", nullptr, false, false);
+        if (ImGui::MenuItem("About Engine")) {
+          showAboutEnginePopup = true;
+        }
+        if (ImGui::MenuItem("Report a bug")) {
+          showReportBugPopup = true;
+        }
         ImGui::EndMenu();
       }
       ImGui::EndMainMenuBar();
+    }
+
+    if (showAboutEnginePopup) {
+      ImGui::OpenPopup("About Engine");
+    }
+    if (ImGui::BeginPopupModal("About Engine", &showAboutEnginePopup, ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::TextWrapped("PaperTTowel Engine\n\n"
+        "This Engine is for studying using imgui and vulkan\n\nwill add openGL support later\n\n"
+        "Copyright (c) 2025 PaperTTowel");
+      ImGui::Dummy(ImVec2(360.f, 140.f));
+      ImGui::Separator();
+      if (ImGui::Button("OK")) {
+        showAboutEnginePopup = false;
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndPopup();
+    }
+
+    if (showReportBugPopup) {
+      ImGui::OpenPopup("Report a bug");
+    }
+    if (ImGui::BeginPopupModal("Report a bug", &showReportBugPopup, ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::TextWrapped("To report a bug, please visit my GitHub page or email me at \'mycat210117@icloud.com\'");
+      ImGui::Dummy(ImVec2(360.f, 140.f));
+      ImGui::Separator();
+      if (ImGui::Button("OK")) {
+        showReportBugPopup = false;
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndPopup();
     }
 
     editor::GizmoContext gizmoContext{};
@@ -326,6 +378,42 @@ namespace lve {
         hierarchyState,
         protectedId,
         &showHierarchy);
+    }
+    if (menuCreateRequest != editor::HierarchyCreateRequest::None) {
+      result.hierarchyActions.createRequest = menuCreateRequest;
+    }
+    if (showUndoHistory) {
+      if (ImGui::Begin("Undo History", &showUndoHistory)) {
+        const auto &commands = history.getCommands();
+        const std::size_t cursor = history.getCursor();
+        std::size_t targetCursor = cursor;
+        bool selectionChanged = false;
+
+        ImGui::PushID("undo_start");
+        if (ImGui::Selectable("Start", cursor == 0)) {
+          targetCursor = 0;
+          selectionChanged = true;
+        }
+        ImGui::PopID();
+        for (std::size_t i = 0; i < commands.size(); ++i) {
+          std::string label = commands[i].label.empty() ? "Action" : commands[i].label;
+          ImGui::PushID(static_cast<int>(i));
+          if (ImGui::Selectable(label.c_str(), (i + 1) == cursor)) {
+            targetCursor = i + 1;
+            selectionChanged = true;
+          }
+          ImGui::PopID();
+        }
+
+        if (selectionChanged && targetCursor != cursor) {
+          if (targetCursor < cursor) {
+            result.undoSteps += static_cast<int>(cursor - targetCursor);
+          } else {
+            result.redoSteps += static_cast<int>(targetCursor - cursor);
+          }
+        }
+      }
+      ImGui::End();
     }
 
     if (showScene) {
@@ -489,13 +577,18 @@ namespace lve {
     SceneSystem &sceneSystem) {
     auto &history = getHistory();
     bool historyTriggered = false;
-    if (result.undoRequested) {
-      history.undo();
-      historyTriggered = true;
-    }
-    if (result.redoRequested) {
-      history.redo();
-      historyTriggered = true;
+    const int undoSteps = result.undoSteps + (result.undoRequested ? 1 : 0);
+    const int redoSteps = result.redoSteps + (result.redoRequested ? 1 : 0);
+    if (undoSteps > 0) {
+      for (int i = 0; i < undoSteps; ++i) {
+        if (!history.undo()) break;
+        historyTriggered = true;
+      }
+    } else if (redoSteps > 0) {
+      for (int i = 0; i < redoSteps; ++i) {
+        if (!history.redo()) break;
+        historyTriggered = true;
+      }
     }
 
     if (!historyTriggered && result.selectedObject) {

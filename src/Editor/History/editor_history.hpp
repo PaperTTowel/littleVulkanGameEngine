@@ -20,6 +20,8 @@ namespace lve::editor {
     bool undo();
     bool redo();
     void clear();
+    const std::vector<HistoryCommand> &getCommands() const { return commands; }
+    std::size_t getCursor() const { return cursor; }
 
   private:
     std::vector<HistoryCommand> commands{};

@@ -308,6 +308,11 @@ namespace lve::editor {
 
     ImGuizmo::OPERATION op = static_cast<ImGuizmo::OPERATION>(gizmoOperation);
     ImGuizmo::MODE mode = static_cast<ImGuizmo::MODE>(gizmoMode);
+    if (op == ImGuizmo::ROTATE) {
+      // Drop screen-space rotation to prevent camera-aligned behavior.
+      op = static_cast<ImGuizmo::OPERATION>(
+        ImGuizmo::ROTATE_X | ImGuizmo::ROTATE_Y | ImGuizmo::ROTATE_Z);
+    }
 
     if (gizmoContext.valid && gizmoContext.drawList) {
       ImGuizmo::BeginFrame();
