@@ -127,7 +127,8 @@ namespace lve {
       if (!currentTexture) {
         continue;
       }
-      if (descriptorSet == VK_NULL_HANDLE || obj.descriptorTextures[frameIndex] != currentTexture) {
+      auto &textureCache = obj.descriptorTextures[frameIndex];
+      if (descriptorSet == VK_NULL_HANDLE || textureCache.baseColor != currentTexture) {
         auto bufferInfo = obj.getBufferInfo(frameIndex);
         VkDescriptorBufferInfo vkBufferInfo{};
         vkBufferInfo.buffer = reinterpret_cast<VkBuffer>(bufferInfo.buffer);
@@ -145,7 +146,7 @@ namespace lve {
           writer.overwrite(descriptorSet);
         }
         descriptorHandle = reinterpret_cast<backend::DescriptorSetHandle>(descriptorSet);
-        obj.descriptorTextures[frameIndex] = currentTexture;
+        textureCache.baseColor = currentTexture;
       }
 
       vkCmdBindDescriptorSets(

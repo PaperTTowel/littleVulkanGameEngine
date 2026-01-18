@@ -25,6 +25,10 @@ namespace lve::backend {
     virtual const std::string &getPath() const = 0;
     virtual bool hasBaseColorTexture() const = 0;
     virtual const RenderTexture *getBaseColorTexture() const = 0;
+    virtual const RenderTexture *getNormalTexture() const = 0;
+    virtual const RenderTexture *getMetallicRoughnessTexture() const = 0;
+    virtual const RenderTexture *getOcclusionTexture() const = 0;
+    virtual const RenderTexture *getEmissiveTexture() const = 0;
     virtual bool applyData(
       const MaterialData &data,
       std::string *outError = nullptr,

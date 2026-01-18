@@ -48,6 +48,9 @@ namespace lve {
 
     LveGameObject::id_t getCharacterId() const { return characterId; }
     void setCharacterId(LveGameObject::id_t id) { characterId = id; }
+    LveGameObject *findActiveCamera();
+    const LveGameObject *findActiveCamera() const;
+    void setActiveCamera(LveGameObject::id_t id, bool active);
 
     void loadGameObjects();
     Scene exportSceneSnapshot();
@@ -71,6 +74,7 @@ namespace lve {
       const glm::vec3 &position,
       const std::string &modelPath = "Assets/models/colored_cube.obj");
     LveGameObject &createPointLightObject(const glm::vec3 &position);
+    LveGameObject &createCameraObject(const glm::vec3 &position);
     LveGameObject &createSpriteObjectWithId(
       LveGameObject::id_t id,
       const glm::vec3 &position,
@@ -86,6 +90,10 @@ namespace lve {
       float intensity,
       float radius,
       const glm::vec3 &color);
+    LveGameObject &createCameraObjectWithId(
+      LveGameObject::id_t id,
+      const glm::vec3 &position,
+      const CameraComponent &camera);
 
   private:
     static ObjectState objectStateFromString(const std::string &name);

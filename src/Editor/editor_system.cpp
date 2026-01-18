@@ -20,6 +20,11 @@
 
 namespace lve {
 
+  namespace {
+    const char *kGameViewCameraWarning = u8"\uC9C0\uC815 Game View \uCE74\uBA54\uB77C\uAC00 \uC0DD\uC131\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.\n"
+      u8"\uCE90\uB9AD\uD130 \uACE0\uC815\uC2DC\uC810 \uCE74\uBA54\uB77C\uB85C \uC790\uB3D9\uC73C\uB85C \uC720\uC9C0\uB429\uB2C8\uB2E4";
+  } // namespace
+
   namespace fs = std::filesystem;
 
   EditorSystem::EditorSystem(backend::EditorRenderBackend &renderBackend)
@@ -129,6 +134,8 @@ namespace lve {
       normalViewEnabled,
       useOrthoCamera,
       showEngineStats);
+    const bool showCameraWarning =
+      showGameViewCameraWarning && sceneSystem.findActiveCamera() == nullptr;
 
     ImGuiIO &io = ImGui::GetIO();
     if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) {
@@ -189,6 +196,7 @@ namespace lve {
         ImGui::MenuItem("Resource Browser", nullptr, &showResourceBrowser);
         ImGui::MenuItem("Scene View", nullptr, &showSceneView);
         ImGui::MenuItem("Game View", nullptr, &showGameView);
+        ImGui::MenuItem("Game View Camera Warning", nullptr, &showGameViewCameraWarning);
         ImGui::EndMenu();
       }
       if (ImGui::BeginMenu("Help")) {
@@ -285,6 +293,7 @@ namespace lve {
     if (showGameView) {
       if (ImGui::Begin("Game View", &showGameView, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
         ImVec2 avail = ImGui::GetContentRegionAvail();
+        ImVec2 contentPos = ImGui::GetCursorScreenPos();
         result.gameView.width = static_cast<uint32_t>(avail.x > 0 ? avail.x : 0);
         result.gameView.height = static_cast<uint32_t>(avail.y > 0 ? avail.y : 0);
         result.gameView.visible = true;
@@ -292,6 +301,20 @@ namespace lve {
           ImGui::Image(gameViewTextureId, avail);
         } else {
           ImGui::TextUnformatted("Game view not ready");
+        }
+        if (showCameraWarning) {
+          ImDrawList *drawList = ImGui::GetWindowDrawList();
+          ImVec2 textSize = ImGui::CalcTextSize(kGameViewCameraWarning);
+          const ImVec2 padding{8.f, 6.f};
+          const ImVec2 origin{contentPos.x + 12.f, contentPos.y + 12.f};
+          const ImVec2 bgMin{origin.x, origin.y};
+          const ImVec2 bgMax{origin.x + textSize.x + padding.x * 2.f, origin.y + textSize.y + padding.y * 2.f};
+          drawList->AddRectFilled(bgMin, bgMax, IM_COL32(20, 20, 20, 200), 4.f);
+          drawList->AddRect(bgMin, bgMax, IM_COL32(255, 200, 120, 200), 4.f);
+          drawList->AddText(
+            ImVec2(origin.x + padding.x, origin.y + padding.y),
+            IM_COL32(255, 200, 120, 255),
+            kGameViewCameraWarning);
         }
       }
       ImGui::End();
@@ -631,6 +654,14 @@ namespace lve {
     SceneSystem &sceneSystem,
     SpriteAnimator *&animator,
     editor::ResourceBrowserState &resourceBrowserState) {
+    if (result.inspectorActions.cameraActiveChanged &&
+        result.selectedObject &&
+        result.selectedObject->camera) {
+      sceneSystem.setActiveCamera(
+        result.selectedObject->getId(),
+        result.inspectorActions.cameraActive);
+    }
+
     if (result.inspectorActions.materialPreviewRequested &&
         result.selectedObject &&
         result.selectedObject->model) {
@@ -930,6 +961,25 @@ namespace lve {
           const editor::GameObjectSnapshot snapshot = editor::CaptureSnapshot(obj);
           history.push({
             "Create Light",
+            [&, id = obj.getId()]() {
+              sceneSystem.destroyObject(id);
+            },
+            [&, snapshot]() {
+              editor::RestoreSnapshot(sceneSystem, animator, snapshot);
+              setSelectedId(snapshot.id);
+            }});
+        }
+        break;
+      }
+      case editor::HierarchyCreateRequest::Camera: {
+        auto &obj = sceneSystem.createCameraObject(spawnPos);
+        sceneSystem.setActiveCamera(obj.getId(), true);
+        setSelectedId(obj.getId());
+        obj.transformDirty = true;
+        if (!historyTriggered) {
+          const editor::GameObjectSnapshot snapshot = editor::CaptureSnapshot(obj);
+          history.push({
+            "Create Camera",
             [&, id = obj.getId()]() {
               sceneSystem.destroyObject(id);
             },

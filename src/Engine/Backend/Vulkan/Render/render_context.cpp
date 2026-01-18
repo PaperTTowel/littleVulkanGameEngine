@@ -33,9 +33,10 @@ namespace lve {
 
     const uint32_t maxObjectSets =
       LveGameObjectManager::MAX_GAME_OBJECTS * LveSwapChain::MAX_FRAMES_IN_FLIGHT;
+    constexpr uint32_t kMaterialTextureCount = 5;
     objectDescriptorPool = LveDescriptorPool::Builder(lveDevice)
       .setMaxSets(maxObjectSets)
-      .addPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, maxObjectSets)
+      .addPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, maxObjectSets * kMaterialTextureCount)
       .addPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, maxObjectSets)
       .setPoolFlags(VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT)
       .build();

@@ -32,11 +32,10 @@ namespace lve {
 
     const backend::RenderTexture *getBaseColorTexture() const override { return baseColorTexture.get(); }
     bool hasBaseColorTexture() const override { return baseColorTexture != nullptr; }
-
-    const std::shared_ptr<LveTexture> &getNormalTexture() const { return normalTexture; }
-    const std::shared_ptr<LveTexture> &getMetallicRoughnessTexture() const { return metallicRoughnessTexture; }
-    const std::shared_ptr<LveTexture> &getOcclusionTexture() const { return occlusionTexture; }
-    const std::shared_ptr<LveTexture> &getEmissiveTexture() const { return emissiveTexture; }
+    const backend::RenderTexture *getNormalTexture() const override { return normalTexture.get(); }
+    const backend::RenderTexture *getMetallicRoughnessTexture() const override { return metallicRoughnessTexture.get(); }
+    const backend::RenderTexture *getOcclusionTexture() const override { return occlusionTexture.get(); }
+    const backend::RenderTexture *getEmissiveTexture() const override { return emissiveTexture.get(); }
 
   private:
     LveDevice &device;

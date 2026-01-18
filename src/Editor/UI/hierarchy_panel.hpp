@@ -7,7 +7,7 @@
 
 namespace lve::editor {
 
-  enum class HierarchyCreateRequest { None, Sprite, Mesh, PointLight };
+  enum class HierarchyCreateRequest { None, Sprite, Mesh, PointLight, Camera };
 
   struct HierarchyPanelState {
     std::optional<LveGameObject::id_t> selectedId{};

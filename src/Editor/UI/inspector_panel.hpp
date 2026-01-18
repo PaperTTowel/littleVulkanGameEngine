@@ -86,6 +86,8 @@ namespace lve::editor {
     bool materialPickRequested{false};
     MaterialTextureSlot materialPickSlot{MaterialTextureSlot::BaseColor};
     bool materialPreviewRequested{false};
+    bool cameraActiveChanged{false};
+    bool cameraActive{false};
   };
 
   struct MaterialPickResult {

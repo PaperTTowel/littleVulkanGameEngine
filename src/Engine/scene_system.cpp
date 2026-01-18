@@ -322,6 +322,17 @@ namespace lve {
     return light;
   }
 
+  LveGameObject &SceneSystem::createCameraObject(const glm::vec3 &position) {
+    auto &cameraObj = gameObjectManager.createGameObject();
+    cameraObj.name = "Camera " + std::to_string(cameraObj.getId());
+    cameraObj.transform.translation = position;
+    cameraObj.transform.rotation = {0.f, 0.f, 0.f};
+    cameraObj.transform.scale = glm::vec3(1.f);
+    cameraObj.transformDirty = true;
+    cameraObj.camera = CameraComponent{};
+    return cameraObj;
+  }
+
   LveGameObject &SceneSystem::createMeshObjectWithId(
     LveGameObject::id_t id,
     const glm::vec3 &position,
@@ -383,6 +394,54 @@ namespace lve {
     return light;
   }
 
+  LveGameObject &SceneSystem::createCameraObjectWithId(
+    LveGameObject::id_t id,
+    const glm::vec3 &position,
+    const CameraComponent &camera) {
+    auto &cameraObj = gameObjectManager.createGameObjectWithId(id);
+    cameraObj.name = "Camera " + std::to_string(cameraObj.getId());
+    cameraObj.transform.translation = position;
+    cameraObj.transform.rotation = {0.f, 0.f, 0.f};
+    cameraObj.transform.scale = glm::vec3(1.f);
+    cameraObj.transformDirty = true;
+    cameraObj.camera = camera;
+    return cameraObj;
+  }
+
+  LveGameObject *SceneSystem::findActiveCamera() {
+    for (auto &kv : gameObjectManager.gameObjects) {
+      auto &obj = kv.second;
+      if (obj.camera && obj.camera->active) {
+        return &obj;
+      }
+    }
+    return nullptr;
+  }
+
+  const LveGameObject *SceneSystem::findActiveCamera() const {
+    for (const auto &kv : gameObjectManager.gameObjects) {
+      const auto &obj = kv.second;
+      if (obj.camera && obj.camera->active) {
+        return &obj;
+      }
+    }
+    return nullptr;
+  }
+
+  void SceneSystem::setActiveCamera(LveGameObject::id_t id, bool active) {
+    for (auto &kv : gameObjectManager.gameObjects) {
+      auto &obj = kv.second;
+      if (!obj.camera) {
+        continue;
+      }
+      if (obj.getId() == id) {
+        obj.camera->active = active;
+      } else if (active) {
+        obj.camera->active = false;
+      }
+    }
+  }
+
   Scene SceneSystem::exportSceneSnapshot() {
     Scene scene{};
     scene.version = 1;
@@ -393,7 +452,7 @@ namespace lve {
 
     for (const auto &kv : gameObjectManager.gameObjects) {
       const auto &obj = kv.second;
-      if (!obj.model && !obj.pointLight && !obj.isSprite) {
+      if (!obj.model && !obj.pointLight && !obj.isSprite && !obj.camera) {
         continue;
       }
       SceneEntity e{};
@@ -422,6 +481,9 @@ namespace lve {
           : (obj.billboardMode == BillboardMode::Cylindrical ? BillboardKind::Cylindrical : BillboardKind::None);
         sc.layer = 0;
         e.sprite = sc;
+      } else if (obj.camera) {
+        e.type = EntityType::Camera;
+        e.camera = *obj.camera;
       } else {
         e.type = EntityType::Mesh;
         MeshComponent mc{};
@@ -493,6 +555,7 @@ namespace lve {
 
     characterId = 0;
     bool characterAssigned = false;
+    std::optional<LveGameObject::id_t> activeCameraId{};
     for (const auto &e : scene.entities) {
       if (e.type == EntityType::Light) {
         auto &light = createPointLightObject(e.transform.position);
@@ -502,6 +565,19 @@ namespace lve {
         }
         light.name = !e.name.empty() ? e.name : "PointLight " + std::to_string(light.getId());
         light.transformDirty = true;
+        continue;
+      }
+
+      if (e.type == EntityType::Camera && e.camera) {
+        auto &cameraObj = createCameraObject(e.transform.position);
+        cameraObj.transform.rotation = e.transform.rotation;
+        cameraObj.transform.scale = e.transform.scale;
+        cameraObj.name = !e.name.empty() ? e.name : "Camera " + std::to_string(cameraObj.getId());
+        cameraObj.camera = *e.camera;
+        cameraObj.transformDirty = true;
+        if (e.camera->active && !activeCameraId) {
+          activeCameraId = cameraObj.getId();
+        }
         continue;
       }
 
@@ -545,6 +621,10 @@ namespace lve {
         }
         continue;
       }
+    }
+
+    if (activeCameraId) {
+      setActiveCamera(*activeCameraId, true);
     }
 
     if (!characterAssigned) {

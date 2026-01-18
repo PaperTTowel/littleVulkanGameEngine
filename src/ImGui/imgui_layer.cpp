@@ -6,6 +6,7 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 
+#include <iostream>
 #include <stdexcept>
 
 namespace lve {
@@ -42,6 +43,17 @@ void ImGuiLayer::init(VkRenderPass renderPass, uint32_t imageCount) {
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
   io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
   ImGui::StyleColorsDark();
+  ImFont *koreanFont = io.Fonts->AddFontFromFileTTF(
+    "Assets/font/neodgm_code.ttf",
+    14.0f,
+    nullptr,
+    io.Fonts->GetGlyphRangesKorean());
+  if (koreanFont) {
+    io.FontDefault = koreanFont;
+  } else {
+    std::cerr << "ImGui font load failed: Assets/font/neodgm_code.ttf\n";
+    io.Fonts->AddFontDefault();
+  }
 
   createDescriptorPool(imageCount);
   ImGui_ImplGlfw_InitForVulkan(window.getGLFWwindow(), true);

@@ -4,6 +4,7 @@
 #include "Engine/Backend/render_assets.hpp"
 #include "Engine/Backend/render_types.hpp"
 #include "utils/sprite_metadata.hpp"
+#include "Engine/scene.hpp"
 // #include "physics/physics_engine.hpp"
 
 // libs
@@ -45,9 +46,28 @@ namespace lve {
     TransformComponent transform{};
   };
 
+  struct MaterialTextureBindings {
+    const backend::RenderTexture *baseColor{nullptr};
+    const backend::RenderTexture *normal{nullptr};
+    const backend::RenderTexture *metallicRoughness{nullptr};
+    const backend::RenderTexture *occlusion{nullptr};
+    const backend::RenderTexture *emissive{nullptr};
+
+    bool operator==(const MaterialTextureBindings &other) const {
+      return baseColor == other.baseColor &&
+        normal == other.normal &&
+        metallicRoughness == other.metallicRoughness &&
+        occlusion == other.occlusion &&
+        emissive == other.emissive;
+    }
+    bool operator!=(const MaterialTextureBindings &other) const {
+      return !(*this == other);
+    }
+  };
+
   struct SubMeshDescriptorCache {
     std::array<backend::DescriptorSetHandle, backend::kMaxFramesInFlight> sets{};
-    std::array<const backend::RenderTexture*, backend::kMaxFramesInFlight> textures{};
+    std::array<MaterialTextureBindings, backend::kMaxFramesInFlight> textures{};
   };
 
   class LveGameObjectManager; // forward declare game object manager class
@@ -79,7 +99,7 @@ namespace lve {
     bool hasPhysics = false;
     bool transformDirty{true};
     std::array<backend::DescriptorSetHandle, backend::kMaxFramesInFlight> descriptorSets{};
-    std::array<const backend::RenderTexture*, backend::kMaxFramesInFlight> descriptorTextures{};
+    std::array<MaterialTextureBindings, backend::kMaxFramesInFlight> descriptorTextures{};
     std::vector<NodeTransformOverride> nodeOverrides{};
     std::vector<SubMeshDescriptorCache> subMeshDescriptors{};
 
@@ -100,6 +120,7 @@ namespace lve {
     std::shared_ptr<backend::RenderMaterial> material{};
     std::shared_ptr<backend::RenderTexture> diffuseMap = nullptr;
     std::unique_ptr<PointLightComponent> pointLight = nullptr;
+    std::optional<CameraComponent> camera{};
 
   private:
     LveGameObject(id_t objId, const LveGameObjectManager &manager);

@@ -10,6 +10,7 @@ namespace lve::editor {
     snapshot.id = obj.getId();
     snapshot.isSprite = obj.isSprite;
     snapshot.isPointLight = obj.pointLight != nullptr;
+    snapshot.isCamera = obj.camera.has_value();
     snapshot.transform = obj.transform;
     snapshot.color = obj.color;
     snapshot.objState = obj.objState;
@@ -18,6 +19,9 @@ namespace lve::editor {
     snapshot.spriteStateName = obj.spriteStateName;
     snapshot.modelPath = obj.modelPath;
     snapshot.materialPath = obj.materialPath;
+    if (obj.camera) {
+      snapshot.camera = *obj.camera;
+    }
     snapshot.nodeOverrides = obj.nodeOverrides;
     snapshot.name = obj.name;
     if (obj.pointLight) {
@@ -65,6 +69,21 @@ namespace lve::editor {
         }
       }
       obj.transformDirty = true;
+      return;
+    }
+
+    if (snapshot.isCamera) {
+      auto &obj = sceneSystem.createCameraObjectWithId(
+        snapshot.id,
+        snapshot.transform.translation,
+        snapshot.camera);
+      obj.transform.rotation = snapshot.transform.rotation;
+      obj.transform.scale = snapshot.transform.scale;
+      obj.name = snapshot.name;
+      obj.transformDirty = true;
+      if (snapshot.camera.active) {
+        sceneSystem.setActiveCamera(obj.getId(), true);
+      }
       return;
     }
 

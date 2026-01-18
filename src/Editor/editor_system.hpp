@@ -96,6 +96,7 @@ namespace lve {
     bool showInspector{true};
     bool showResourceBrowser{true};
     bool showFileDialog{false};
+    bool showGameViewCameraWarning{true};
     FileDialogPurpose fileDialogPurpose{FileDialogPurpose::Import};
     ImportOptionsState importOptions;
     bool showSceneView{true};

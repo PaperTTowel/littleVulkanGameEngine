@@ -20,9 +20,10 @@ namespace lve {
 
   struct SimplePushConstantData {
     glm::mat4 modelMatrix{1.f};
-    glm::ivec4 flags0{0}; // useTexture, currentFrame, objectState, direction
-    glm::ivec4 flags1{0}; // debugView, padding
+    glm::ivec4 flags0{0}; // textureMask, currentFrame, objectState, direction
     glm::vec4 baseColorFactor{1.f};
+    glm::vec4 emissiveMetallic{0.f}; // emissive.rgb, metallic.a
+    glm::vec4 miscFactors{1.f, 1.f, 1.f, 0.f}; // roughness, occlusionStrength, normalScale, debugView
   };
 
   SimpleRenderSystem::SimpleRenderSystem(LveDevice &device, VkRenderPass renderPass, VkDescriptorSetLayout globalSetLayout)
@@ -48,6 +49,10 @@ namespace lve {
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .addBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .addBinding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
         .build();
 
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts{
@@ -128,9 +133,49 @@ namespace lve {
         ? static_cast<const LveTexture*>(obj.material->getBaseColorTexture())
         : nullptr;
       const bool hasOverrideTexture = overrideTexture != nullptr;
-      const glm::vec4 baseColorFactor = obj.material
-        ? obj.material->getData().factors.baseColor
-        : glm::vec4(1.f);
+      const LveTexture *fallbackTexture = static_cast<const LveTexture*>(obj.diffuseMap.get());
+      if (!fallbackTexture) {
+        fallbackTexture = overrideTexture;
+      }
+      MaterialFactors factors{};
+      const LveTexture *normalTexture = nullptr;
+      const LveTexture *metallicRoughnessTexture = nullptr;
+      const LveTexture *occlusionTexture = nullptr;
+      const LveTexture *emissiveTexture = nullptr;
+      bool hasNormalTexture = false;
+      bool hasMetallicRoughnessTexture = false;
+      bool hasOcclusionTexture = false;
+      bool hasEmissiveTexture = false;
+      if (obj.material) {
+        factors = obj.material->getData().factors;
+        normalTexture = static_cast<const LveTexture*>(obj.material->getNormalTexture());
+        metallicRoughnessTexture = static_cast<const LveTexture*>(obj.material->getMetallicRoughnessTexture());
+        occlusionTexture = static_cast<const LveTexture*>(obj.material->getOcclusionTexture());
+        emissiveTexture = static_cast<const LveTexture*>(obj.material->getEmissiveTexture());
+        hasNormalTexture = normalTexture != nullptr;
+        hasMetallicRoughnessTexture = metallicRoughnessTexture != nullptr;
+        hasOcclusionTexture = occlusionTexture != nullptr;
+        hasEmissiveTexture = emissiveTexture != nullptr;
+      } else {
+        factors.baseColor = glm::vec4(1.f);
+        factors.metallic = 0.f;
+        factors.roughness = 0.f;
+        factors.emissive = glm::vec3(0.f);
+        factors.occlusionStrength = 1.f;
+        factors.normalScale = 1.f;
+      }
+      if (!normalTexture) {
+        normalTexture = fallbackTexture;
+      }
+      if (!metallicRoughnessTexture) {
+        metallicRoughnessTexture = fallbackTexture;
+      }
+      if (!occlusionTexture) {
+        occlusionTexture = fallbackTexture;
+      }
+      if (!emissiveTexture) {
+        emissiveTexture = fallbackTexture;
+      }
 
       model->bind(frameInfo.commandBuffer);
 
@@ -141,15 +186,38 @@ namespace lve {
         const LveTexture *currentTexture = hasOverrideTexture
           ? overrideTexture
           : static_cast<const LveTexture*>(obj.diffuseMap.get());
-        if (!currentTexture) {
+        const LveTexture *baseTexture = currentTexture ? currentTexture : fallbackTexture;
+        const int useTexture = hasOverrideTexture ? 1 : obj.enableTextureType;
+        int textureMask = 0;
+        if (useTexture && currentTexture) textureMask |= 1;
+        if (hasNormalTexture) textureMask |= (1 << 1);
+        if (hasMetallicRoughnessTexture) textureMask |= (1 << 2);
+        if (hasOcclusionTexture) textureMask |= (1 << 3);
+        if (hasEmissiveTexture) textureMask |= (1 << 4);
+        if (!baseTexture || !normalTexture || !metallicRoughnessTexture || !occlusionTexture || !emissiveTexture) {
           continue;
         }
+        MaterialTextureBindings bindings{};
+        bindings.baseColor = baseTexture;
+        bindings.normal = normalTexture;
+        bindings.metallicRoughness = metallicRoughnessTexture;
+        bindings.occlusion = occlusionTexture;
+        bindings.emissive = emissiveTexture;
+        auto &textureCache = obj.descriptorTextures[frameIndex];
         if (gameObjectDescriptorSet == VK_NULL_HANDLE ||
-            obj.descriptorTextures[frameIndex] != currentTexture) {
-          auto imageInfo = currentTexture->getImageInfo();
+            textureCache != bindings) {
+          auto baseInfo = baseTexture->getImageInfo();
+          auto normalInfo = normalTexture->getImageInfo();
+          auto metallicInfo = metallicRoughnessTexture->getImageInfo();
+          auto occlusionInfo = occlusionTexture->getImageInfo();
+          auto emissiveInfo = emissiveTexture->getImageInfo();
           LveDescriptorWriter writer(*renderSystemLayout, frameInfo.frameDescriptorPool);
           writer.writeBuffer(0, &vkBufferInfo)
-            .writeImage(1, &imageInfo);
+            .writeImage(1, &baseInfo)
+            .writeImage(2, &normalInfo)
+            .writeImage(3, &metallicInfo)
+            .writeImage(4, &occlusionInfo)
+            .writeImage(5, &emissiveInfo);
           if (gameObjectDescriptorSet == VK_NULL_HANDLE) {
             if (!writer.build(gameObjectDescriptorSet)) {
               throw std::runtime_error("failed to build game object descriptor set");
@@ -158,7 +226,7 @@ namespace lve {
             writer.overwrite(gameObjectDescriptorSet);
           }
           descriptorHandle = reinterpret_cast<backend::DescriptorSetHandle>(gameObjectDescriptorSet);
-          obj.descriptorTextures[frameIndex] = currentTexture;
+          textureCache = bindings;
         }
 
         vkCmdBindDescriptorSets(
@@ -174,12 +242,17 @@ namespace lve {
         SimplePushConstantData push{};
         push.modelMatrix = obj.transform.mat4();
         push.flags0 = glm::ivec4(
-          hasOverrideTexture ? 1 : obj.enableTextureType,
+          textureMask,
           obj.currentFrame,
           static_cast<int>(obj.objState),
           static_cast<int>(obj.directions));
-        push.flags1 = glm::ivec4(normalViewEnabled ? 1 : 0, 0, 0, 0);
-        push.baseColorFactor = baseColorFactor;
+        push.baseColorFactor = factors.baseColor;
+        push.emissiveMetallic = glm::vec4(factors.emissive, factors.metallic);
+        push.miscFactors = glm::vec4(
+          factors.roughness,
+          factors.occlusionStrength,
+          factors.normalScale,
+          normalViewEnabled ? 1.f : 0.f);
 
         vkCmdPushConstants(
           frameInfo.commandBuffer,
@@ -229,20 +302,42 @@ namespace lve {
           const LveTexture *currentTexture = hasOverrideTexture
             ? overrideTexture
             : (subMeshTexture ? subMeshTexture : static_cast<const LveTexture*>(obj.diffuseMap.get()));
-          if (!currentTexture) {
-            continue;
-          }
           const int useTexture = hasOverrideTexture
             ? 1
             : ((obj.enableTextureType && subMeshTexture != nullptr) ? 1 : 0);
+          int textureMask = 0;
+          if (useTexture && currentTexture) textureMask |= 1;
+          if (hasNormalTexture) textureMask |= (1 << 1);
+          if (hasMetallicRoughnessTexture) textureMask |= (1 << 2);
+          if (hasOcclusionTexture) textureMask |= (1 << 3);
+          if (hasEmissiveTexture) textureMask |= (1 << 4);
+          const LveTexture *baseTexture = currentTexture ? currentTexture : fallbackTexture;
+          if (!baseTexture || !normalTexture || !metallicRoughnessTexture || !occlusionTexture || !emissiveTexture) {
+            continue;
+          }
+          MaterialTextureBindings bindings{};
+          bindings.baseColor = baseTexture;
+          bindings.normal = normalTexture;
+          bindings.metallicRoughness = metallicRoughnessTexture;
+          bindings.occlusion = occlusionTexture;
+          bindings.emissive = emissiveTexture;
           auto &cache = obj.subMeshDescriptors[static_cast<std::size_t>(meshIndex)];
           auto &descriptorHandle = cache.sets[frameIndex];
           VkDescriptorSet descriptorSet = reinterpret_cast<VkDescriptorSet>(descriptorHandle);
-          if (descriptorSet == VK_NULL_HANDLE || cache.textures[frameIndex] != currentTexture) {
-            auto imageInfo = currentTexture->getImageInfo();
+          auto &textureCache = cache.textures[frameIndex];
+          if (descriptorSet == VK_NULL_HANDLE || textureCache != bindings) {
+            auto baseInfo = baseTexture->getImageInfo();
+            auto normalInfo = normalTexture->getImageInfo();
+            auto metallicInfo = metallicRoughnessTexture->getImageInfo();
+            auto occlusionInfo = occlusionTexture->getImageInfo();
+            auto emissiveInfo = emissiveTexture->getImageInfo();
             LveDescriptorWriter writer(*renderSystemLayout, frameInfo.frameDescriptorPool);
             writer.writeBuffer(0, &vkBufferInfo)
-              .writeImage(1, &imageInfo);
+              .writeImage(1, &baseInfo)
+              .writeImage(2, &normalInfo)
+              .writeImage(3, &metallicInfo)
+              .writeImage(4, &occlusionInfo)
+              .writeImage(5, &emissiveInfo);
             if (descriptorSet == VK_NULL_HANDLE) {
               if (!writer.build(descriptorSet)) {
                 throw std::runtime_error("failed to build submesh descriptor set");
@@ -251,7 +346,7 @@ namespace lve {
               writer.overwrite(descriptorSet);
             }
             descriptorHandle = reinterpret_cast<backend::DescriptorSetHandle>(descriptorSet);
-            cache.textures[frameIndex] = currentTexture;
+            textureCache = bindings;
           }
 
           vkCmdBindDescriptorSets(
@@ -267,12 +362,17 @@ namespace lve {
           SimplePushConstantData push{};
           push.modelMatrix = modelMatrix;
           push.flags0 = glm::ivec4(
-            useTexture,
+            textureMask,
             obj.currentFrame,
             static_cast<int>(obj.objState),
             static_cast<int>(obj.directions));
-          push.flags1 = glm::ivec4(normalViewEnabled ? 1 : 0, 0, 0, 0);
-          push.baseColorFactor = baseColorFactor;
+          push.baseColorFactor = factors.baseColor;
+          push.emissiveMetallic = glm::vec4(factors.emissive, factors.metallic);
+          push.miscFactors = glm::vec4(
+            factors.roughness,
+            factors.occlusionStrength,
+            factors.normalScale,
+            normalViewEnabled ? 1.f : 0.f);
 
           vkCmdPushConstants(
             frameInfo.commandBuffer,

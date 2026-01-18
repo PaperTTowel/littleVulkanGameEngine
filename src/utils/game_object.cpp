@@ -199,10 +199,10 @@ namespace lve {
     for (auto &kv : gameObjects) {
       auto &obj = kv.second;
       obj.descriptorSets.fill(nullptr);
-      obj.descriptorTextures.fill(nullptr);
+      obj.descriptorTextures.fill(MaterialTextureBindings{});
       for (auto &cache : obj.subMeshDescriptors) {
         cache.sets.fill(nullptr);
-        cache.textures.fill(nullptr);
+        cache.textures.fill(MaterialTextureBindings{});
       }
     }
   }

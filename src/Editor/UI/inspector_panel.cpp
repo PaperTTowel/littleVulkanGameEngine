@@ -7,6 +7,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <cmath>
 
 #include <algorithm>
 #include <cctype>
@@ -32,6 +33,7 @@ namespace lve::editor {
     }
 
     const char *typeLabel(const LveGameObject &obj) {
+      if (obj.camera) return "Camera";
       if (obj.pointLight) return "Light";
       if (obj.isSprite) return "Sprite";
       if (obj.model) return "Mesh";
@@ -106,6 +108,41 @@ namespace lve::editor {
         return ImVec2{maxSize, maxSize * (h / w)};
       }
       return ImVec2{maxSize * (w / h), maxSize};
+    }
+
+    void decomposeMatrixToComponentsYXZ(
+      const glm::mat4 &matrix,
+      glm::vec3 &translation,
+      glm::vec3 &rotation,
+      glm::vec3 &scale) {
+      translation = glm::vec3(matrix[3]);
+
+      scale.x = glm::length(glm::vec3(matrix[0]));
+      scale.y = glm::length(glm::vec3(matrix[1]));
+      scale.z = glm::length(glm::vec3(matrix[2]));
+
+      glm::mat4 rotationMatrix = matrix;
+      if (scale.x != 0.f) {
+        rotationMatrix[0] /= scale.x;
+      }
+      if (scale.y != 0.f) {
+        rotationMatrix[1] /= scale.y;
+      }
+      if (scale.z != 0.f) {
+        rotationMatrix[2] /= scale.z;
+      }
+
+      const float yaw = std::atan2(rotationMatrix[2][0], rotationMatrix[2][2]);
+      const float c2 = std::sqrt(
+        rotationMatrix[0][1] * rotationMatrix[0][1] +
+        rotationMatrix[1][1] * rotationMatrix[1][1]);
+      const float pitch = std::atan2(-rotationMatrix[2][1], c2);
+      const float s1 = std::sin(yaw);
+      const float c1 = std::cos(yaw);
+      const float roll = std::atan2(
+        s1 * rotationMatrix[1][2] - c1 * rotationMatrix[1][0],
+        c1 * rotationMatrix[0][0] - s1 * rotationMatrix[0][2]);
+      rotation = glm::vec3{pitch, yaw, roll};
     }
   } // namespace
 
@@ -349,7 +386,6 @@ namespace lve::editor {
 
       gizmoUsing = ImGuizmo::IsUsing();
       if (gizmoUsing) {
-        float trans[3], rotDeg[3], scale[3];
         if (editNode && activeNodeIndex >= 0 && selected->model) {
           beginNodeOverrideEdit();
           glm::mat4 newWorld = glm::make_mat4(modelArr);
@@ -361,23 +397,26 @@ namespace lve::editor {
           }
           const glm::mat4 localBase = nodes[static_cast<std::size_t>(activeNodeIndex)].localTransform;
           glm::mat4 localOverride = glm::inverse(localBase) * glm::inverse(parentEff) * glm::inverse(objectTransform) * newWorld;
-
-          float overrideArr[16];
-          std::memcpy(overrideArr, glm::value_ptr(localOverride), sizeof(overrideArr));
-          ImGuizmo::DecomposeMatrixToComponents(overrideArr, trans, rotDeg, scale);
+          glm::vec3 trans{0.f};
+          glm::vec3 rot{0.f};
+          glm::vec3 scale{1.f};
+          decomposeMatrixToComponentsYXZ(localOverride, trans, rot, scale);
 
           if (selected->nodeOverrides.size() == nodes.size()) {
             auto &override = selected->nodeOverrides[static_cast<std::size_t>(activeNodeIndex)];
             override.enabled = true;
-            override.transform.translation = glm::vec3{trans[0], trans[1], trans[2]};
-            override.transform.rotation = glm::radians(glm::vec3{rotDeg[0], rotDeg[1], rotDeg[2]});
-            override.transform.scale = glm::vec3{scale[0], scale[1], scale[2]};
+            override.transform.translation = trans;
+            override.transform.rotation = rot;
+            override.transform.scale = scale;
           }
         } else {
-          ImGuizmo::DecomposeMatrixToComponents(modelArr, trans, rotDeg, scale);
-          selected->transform.translation = glm::vec3{trans[0], trans[1], trans[2]};
-          selected->transform.rotation = glm::radians(glm::vec3{rotDeg[0], rotDeg[1], rotDeg[2]});
-          selected->transform.scale = glm::vec3{scale[0], scale[1], scale[2]};
+          glm::vec3 trans{0.f};
+          glm::vec3 rot{0.f};
+          glm::vec3 scale{1.f};
+          decomposeMatrixToComponentsYXZ(glm::make_mat4(modelArr), trans, rot, scale);
+          selected->transform.translation = trans;
+          selected->transform.rotation = rot;
+          selected->transform.scale = scale;
           transformEdited = true;
           if (!state.transformEditing) {
             state.transformEditing = true;
@@ -425,6 +464,31 @@ namespace lve::editor {
       ImGui::Text("Light");
       ImGui::ColorEdit3("Color", &selected->color.x);
       ImGui::DragFloat("Intensity", &selected->pointLight->lightIntensity, 0.1f, 0.0f, 100.f);
+    }
+
+    if (selected->camera) {
+      ImGui::Separator();
+      ImGui::Text("Camera");
+      auto &camera = *selected->camera;
+      bool active = camera.active;
+      if (ImGui::Checkbox("Active (Game View)", &active)) {
+        camera.active = active;
+        actions.cameraActiveChanged = true;
+        actions.cameraActive = active;
+      }
+
+      int projectionMode = (camera.projection == "ortho") ? 1 : 0;
+      const char *projectionLabels[] = { "Perspective", "Orthographic" };
+      if (ImGui::Combo("Projection", &projectionMode, projectionLabels, IM_ARRAYSIZE(projectionLabels))) {
+        camera.projection = (projectionMode == 1) ? "ortho" : "persp";
+      }
+      if (camera.projection == "ortho") {
+        ImGui::DragFloat("Ortho Height", &camera.orthoHeight, 0.1f, 0.1f, 1000.f);
+      } else {
+        ImGui::SliderFloat("FOV", &camera.fov, 20.f, 120.f);
+      }
+      ImGui::DragFloat("Near", &camera.nearPlane, 0.01f, 0.001f, 10.f);
+      ImGui::DragFloat("Far", &camera.farPlane, 1.f, 1.f, 10000.f);
     }
 
     if (selected->isSprite && animator) {

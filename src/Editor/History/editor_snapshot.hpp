@@ -16,6 +16,7 @@ namespace lve::editor {
     LveGameObject::id_t id{0};
     bool isSprite{false};
     bool isPointLight{false};
+    bool isCamera{false};
     TransformComponent transform{};
     glm::vec3 color{1.f, 1.f, 1.f};
     float lightIntensity{1.f};
@@ -25,6 +26,7 @@ namespace lve::editor {
     std::string spriteStateName{};
     std::string modelPath{};
     std::string materialPath{};
+    CameraComponent camera{};
     std::vector<NodeTransformOverride> nodeOverrides{};
     std::string name{};
   };

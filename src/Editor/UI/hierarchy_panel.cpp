@@ -11,7 +11,9 @@ namespace lve::editor {
   namespace {
     std::string makeLabel(const LveGameObject &obj) {
       const char *type = "Mesh";
-      if (obj.pointLight) {
+      if (obj.camera) {
+        type = "Camera";
+      } else if (obj.pointLight) {
         type = "PointLight";
       } else if (obj.isSprite) {
         type = "Sprite";
@@ -175,16 +177,23 @@ namespace lve::editor {
     }
 
     ImGui::Separator();
-    if (ImGui::Button("Add Sprite")) {
-      actions.createRequest = HierarchyCreateRequest::Sprite;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Add Mesh")) {
-      actions.createRequest = HierarchyCreateRequest::Mesh;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Add Point Light")) {
-      actions.createRequest = HierarchyCreateRequest::PointLight;
+    if (ImGui::BeginPopupContextWindow("HierarchyContext", ImGuiPopupFlags_MouseButtonRight)) {
+      if (ImGui::BeginMenu("Add")) {
+        if (ImGui::MenuItem("Sprite")) {
+          actions.createRequest = HierarchyCreateRequest::Sprite;
+        }
+        if (ImGui::MenuItem("Mesh")) {
+          actions.createRequest = HierarchyCreateRequest::Mesh;
+        }
+        if (ImGui::MenuItem("Point Light")) {
+          actions.createRequest = HierarchyCreateRequest::PointLight;
+        }
+        if (ImGui::MenuItem("Camera")) {
+          actions.createRequest = HierarchyCreateRequest::Camera;
+        }
+        ImGui::EndMenu();
+      }
+      ImGui::EndPopup();
     }
 
     const bool canDelete =

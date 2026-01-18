@@ -128,11 +128,6 @@ namespace lve {
       }
       sceneSystem.updateAnimationFrame(character, 6, frameTime, 0.15f);
 
-      // game camera follows character
-      const glm::vec3 gameCamOffset{-3.0f, -2.0f, 0.0f};
-      const glm::vec3 gameCamPos = character.transform.translation + gameCamOffset;
-      gameCamera.setViewTarget(gameCamPos, character.transform.translation);
-
       auto commandBuffer = renderBackend.beginFrame();
       if (renderBackend.wasSwapChainRecreated()) {
         editorSystem->onRenderPassChanged(
@@ -181,7 +176,39 @@ namespace lve {
         const uint32_t gameWidth = gameViewInfo.width > 0 ? gameViewInfo.width : windowExtent.width;
         const uint32_t gameHeight = gameViewInfo.height > 0 ? gameViewInfo.height : windowExtent.height;
         const float gameAspect = gameHeight > 0 ? (static_cast<float>(gameWidth) / static_cast<float>(gameHeight)) : renderBackend.getAspectRatio();
-        if (useOrthoCamera) {
+
+        const LveGameObject *activeCamera = sceneSystem.findActiveCamera();
+        const bool useSceneCamera = activeCamera && activeCamera->camera;
+        if (useSceneCamera) {
+          gameCamera.setViewYXZ(
+            activeCamera->transform.translation,
+            activeCamera->transform.rotation);
+        } else {
+          const glm::vec3 gameCamOffset{-3.0f, -2.0f, 0.0f};
+          const glm::vec3 gameCamPos = character.transform.translation + gameCamOffset;
+          gameCamera.setViewTarget(gameCamPos, character.transform.translation);
+        }
+
+        if (useSceneCamera && activeCamera && activeCamera->camera) {
+          const auto &camera = *activeCamera->camera;
+          if (camera.projection == "ortho") {
+            const float orthoHeight = camera.orthoHeight;
+            const float orthoWidth = orthoHeight * gameAspect;
+            gameCamera.setOrthographicProjection(
+              -orthoWidth / 2.f,
+              orthoWidth / 2.f,
+              -orthoHeight / 2.f,
+              orthoHeight / 2.f,
+              camera.nearPlane,
+              camera.farPlane);
+          } else {
+            gameCamera.setPerspectiveProjection(
+              glm::radians(camera.fov),
+              gameAspect,
+              camera.nearPlane,
+              camera.farPlane);
+          }
+        } else if (useOrthoCamera) {
           float orthoHeight = 10.f;
           float orthoWidth = orthoHeight * gameAspect;
           gameCamera.setOrthographicProjection(

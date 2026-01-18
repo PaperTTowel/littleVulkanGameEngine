@@ -27,8 +27,9 @@ layout(set = 0, binding = 0) uniform GlobalUbo {
 layout(push_constant) uniform Push {
   mat4 modelMatrix;
   ivec4 flags0;
-  ivec4 flags1;
   vec4 baseColor;
+  vec4 emissiveMetallic;
+  vec4 misc;
 } push;
 
 void main() {
