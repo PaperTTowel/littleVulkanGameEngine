@@ -37,6 +37,11 @@ namespace lve {
     }
     bool wasWindowResized() const { return framebufferResized; }
     void resetWindowResizedFlag() { framebufferResized = false; }
+    float consumeScrollDeltaY() {
+      const float delta = scrollDeltaY;
+      scrollDeltaY = 0.f;
+      return delta;
+    }
     GLFWwindow *getGLFWwindow() const { return window; }
 
     void pollEvents();
@@ -46,14 +51,23 @@ namespace lve {
 
   private:
     static void framebufferResizeCallback(GLFWwindow *window, int width, int height);
+    static void scrollCallback(GLFWwindow *window, double xoffset, double yoffset);
     void initWindow();
+#ifdef _WIN32
+    void setWindowIconWin32();
+#endif
 
     int width;
     int height;
     bool framebufferResized{false};
+    float scrollDeltaY{0.f};
     WindowClientApi clientApi{WindowClientApi::Vulkan};
 
     std::string windowName;
     GLFWwindow *window{nullptr};
+#ifdef _WIN32
+    void *windowIconLarge{nullptr};
+    void *windowIconSmall{nullptr};
+#endif
   };
 } // namespace lve

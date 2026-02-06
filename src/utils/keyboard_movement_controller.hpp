@@ -34,9 +34,10 @@ namespace lve {
       backend::KeyCode moveRight = backend::KeyCode::D;
       backend::KeyCode moveForward = backend::KeyCode::W;
       backend::KeyCode moveBackward = backend::KeyCode::S;
+      backend::KeyCode jump = backend::KeyCode::Space;
     };
 
-    void moveInPlaneXZ(backend::InputProvider &input, float dt, LveGameObject &gameObject);
+    glm::vec3 moveInPlaneXZ(backend::InputProvider &input, float dt, LveGameObject &gameObject);
 
     KeyMappings keys{};
     float moveSpeed{2.f};

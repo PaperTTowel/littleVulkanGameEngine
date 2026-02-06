@@ -228,7 +228,11 @@ namespace lve {
 
     character.animationTimeAccumulator += frameTime;
     if (character.animationTimeAccumulator >= frameDuration) {
-      character.currentFrame = (character.currentFrame + 1) % frameCount;
+      if (stateInfo && !stateInfo->loop && character.currentFrame >= frameCount - 1) {
+        character.currentFrame = frameCount - 1;
+      } else {
+        character.currentFrame = (character.currentFrame + 1) % frameCount;
+      }
       character.animationTimeAccumulator = 0.0f;
     }
   }

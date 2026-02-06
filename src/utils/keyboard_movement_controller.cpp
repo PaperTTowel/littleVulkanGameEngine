@@ -1,5 +1,9 @@
 #include "keyboard_movement_controller.hpp"
 
+#include "Engine/coords.hpp"
+
+#include <limits>
+
 namespace lve {
 
   void KeyboardMovementController::moveInPlaneXZ(backend::InputProvider &input, float dt, LveGameObject &gameObject) {
@@ -20,7 +24,7 @@ namespace lve {
     float yaw = gameObject.transform.rotation.y;
     const glm::vec3 forwardDir{sin(yaw), 0.f, cos(yaw)};
     const glm::vec3 rightDir{forwardDir.z, 0.f, -forwardDir.x};
-    const glm::vec3 upDir{0.f, -1.f, 0.f};
+    const glm::vec3 upDir = coords::kUp;
 
     glm::vec3 moveDir{0.f};
     if (input.isKeyPressed(keys.moveForward)) moveDir += forwardDir;
@@ -35,20 +39,19 @@ namespace lve {
     }
   }
 
-  void CharacterMovementController::moveInPlaneXZ(backend::InputProvider &input, float dt, LveGameObject &character) {
-    float yaw = character.transform.rotation.y;
-    const glm::vec3 forwardDir{cos(yaw), 0.f, sin(yaw)};
-    const glm::vec3 rightDir{forwardDir.z, 0.f, -forwardDir.x};
-    const glm::vec3 upDir{0.f, -1.f, 0.f};
+  glm::vec3 CharacterMovementController::moveInPlaneXZ(backend::InputProvider &input, float dt, LveGameObject &character) {
+    (void)dt;
+    const glm::vec3 rightDir = coords::kRight;
+    const glm::vec3 upDir = coords::kUp;
 
     glm::vec3 moveDir{0.f};
     if (input.isKeyPressed(keys.moveForward)) {
-      moveDir += forwardDir;
+      moveDir += upDir;
       character.directions = Direction::UP;
       character.objState = ObjectState::WALKING;
     }
     if (input.isKeyPressed(keys.moveBackward)) {
-      moveDir -= forwardDir;
+      moveDir -= upDir;
       character.directions = Direction::DOWN;
       character.objState = ObjectState::WALKING;
     }
@@ -66,9 +69,7 @@ namespace lve {
       character.objState = ObjectState::IDLE;
     }
 
-    if (glm::dot(moveDir, moveDir) > std::numeric_limits<float>::epsilon()) {
-      character.transform.translation += moveSpeed * dt * glm::normalize(moveDir);
-    }
+    return moveDir;
   }
 
 } // namespace lve

@@ -30,8 +30,10 @@ namespace lve{
 
     void LveCamera::setViewDirection(glm::vec3 position, glm::vec3 direction, glm::vec3 up) {
         const glm::vec3 w{glm::normalize(direction)};
-        const glm::vec3 u{glm::normalize(glm::cross(w, up))};
-        const glm::vec3 v{glm::cross(w, u)};
+        // Keep Y-down cameras (up = {0,-1,0}) without mirroring X:
+        // right must be computed as up x forward.
+        const glm::vec3 u{glm::normalize(glm::cross(up, w))};
+        const glm::vec3 v{glm::cross(u, w)};
 
         viewMatrix = glm::mat4{1.f};
         viewMatrix[0][0] = u.x;

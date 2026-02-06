@@ -7,8 +7,13 @@
 #include <vulkan/vulkan.h>
 #include <glm/vec3.hpp>
 #include <array>
+#include <string>
 
 namespace lve {
+namespace game {
+  struct PlayerTuning;
+}
+
 class ImGuiLayer {
 public:
   ImGuiLayer(LveWindow &window, LveDevice &device);
@@ -16,7 +21,7 @@ public:
 
   void init(VkRenderPass renderPass, uint32_t imageCount = LveSwapChain::MAX_FRAMES_IN_FLIGHT);
   void newFrame();
-  void buildUI(float frameTime, const glm::vec3 &cameraPos, const glm::vec3 &cameraRot, bool &wireframeEnabled, bool &normalViewEnabled, bool &useOrthoCamera, bool &showEngineStats);
+  void buildUI(float frameTime, const glm::vec3 &cameraPos, const glm::vec3 &cameraRot, const std::string &tileDebugText, bool &wireframeEnabled, bool &normalViewEnabled, bool &useOrthoCamera, lve::game::PlayerTuning &playerTuning, bool &showEngineStats);
   void render(VkCommandBuffer commandBuffer);
   void renderPlatformWindows();
   void shutdown();

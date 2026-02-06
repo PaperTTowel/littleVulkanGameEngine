@@ -4,87 +4,76 @@
 #include "Engine/Backend/Vulkan/Render/model.hpp"
 #include "Engine/Backend/Vulkan/Render/texture.hpp"
 #include "Engine/IO/image_io.hpp"
-#include "Engine/IO/model_io.hpp"
 #include "Engine/IO/material_io.hpp"
 
+#include <cctype>
 #include <exception>
 #include <iostream>
-#include <unordered_map>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 namespace lve::backend {
+  namespace {
+    std::string toLowerCopy(std::string_view value) {
+      std::string out;
+      out.reserve(value.size());
+      for (char ch : value) {
+        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+      }
+      return out;
+    }
+
+    bool isQuadPath(const std::string &path) {
+      const std::string lower = toLowerCopy(path);
+      const std::string_view needle = "quad";
+      const std::size_t pos = lower.find(needle);
+      if (pos == std::string::npos) {
+        return false;
+      }
+      return true;
+    }
+
+    backend::ModelData makeQuadModelData() {
+      backend::ModelData data{};
+      data.vertices = {
+        {{-0.5f, -0.5f, 0.0f}, {1.f, 1.f, 1.f}, {0.f, 0.f, 1.f}, {0.f, 1.f}},
+        {{ 0.5f, -0.5f, 0.0f}, {1.f, 1.f, 1.f}, {0.f, 0.f, 1.f}, {1.f, 1.f}},
+        {{ 0.5f,  0.5f, 0.0f}, {1.f, 1.f, 1.f}, {0.f, 0.f, 1.f}, {1.f, 0.f}},
+        {{-0.5f,  0.5f, 0.0f}, {1.f, 1.f, 1.f}, {0.f, 0.f, 1.f}, {0.f, 0.f}},
+      };
+      data.indices = {0, 1, 2, 2, 3, 0};
+
+      backend::ModelSubMesh subMesh{};
+      subMesh.firstIndex = 0;
+      subMesh.indexCount = static_cast<std::uint32_t>(data.indices.size());
+      subMesh.materialIndex = -1;
+      subMesh.hasBounds = true;
+      subMesh.boundsMin = {-0.5f, -0.5f, 0.0f};
+      subMesh.boundsMax = {0.5f, 0.5f, 0.0f};
+      data.subMeshes.push_back(subMesh);
+
+      backend::ModelNode node{};
+      node.name = "Quad";
+      node.parent = -1;
+      node.meshes.push_back(0);
+      data.nodes.push_back(std::move(node));
+      return data;
+    }
+  } // namespace
 
   VulkanRenderAssetFactory::VulkanRenderAssetFactory(LveDevice &device)
     : device{device} {}
 
   std::shared_ptr<RenderModel> VulkanRenderAssetFactory::loadModel(const std::string &path) {
-    backend::ModelData data{};
-    std::string error;
-    if (!loadModelDataFromFile(path, data, &error)) {
-      std::cerr << "Failed to load model " << path;
-      if (!error.empty()) {
-        std::cerr << ": " << error;
-      }
-      std::cerr << "\n";
+    if (!isQuadPath(path)) {
+      std::cerr << "Model loading disabled in 2D mode: " << path << "\n";
       return {};
     }
 
-    std::unordered_map<std::string, std::shared_ptr<LveTexture>> fileCache;
+    backend::ModelData data = makeQuadModelData();
     std::vector<std::shared_ptr<LveTexture>> materialTextures;
-    materialTextures.resize(data.materials.size());
-
-    for (std::size_t i = 0; i < data.materials.size(); ++i) {
-      const auto &source = data.materials[i].diffuse;
-      std::shared_ptr<LveTexture> texture{};
-
-      if (source.kind == backend::ModelTextureSource::Kind::File && !source.path.empty()) {
-        auto it = fileCache.find(source.path);
-        if (it != fileCache.end()) {
-          texture = it->second;
-        } else {
-          ImageData image{};
-          std::string texError;
-          if (loadImageDataFromFile(source.path, image, &texError)) {
-            auto uniqueTex = LveTexture::createTextureFromRgba(
-              device,
-              image.pixels.data(),
-              image.width,
-              image.height);
-            texture = std::shared_ptr<LveTexture>(std::move(uniqueTex));
-            fileCache[source.path] = texture;
-          } else {
-            std::cerr << "Failed to load model texture " << source.path;
-            if (!texError.empty()) {
-              std::cerr << ": " << texError;
-            }
-            std::cerr << "\n";
-          }
-        }
-      } else if (
-        source.kind == backend::ModelTextureSource::Kind::EmbeddedCompressed ||
-        source.kind == backend::ModelTextureSource::Kind::EmbeddedRaw) {
-        ImageData image{};
-        std::string texError;
-        if (loadImageDataFromTextureSource(source, image, &texError)) {
-          auto uniqueTex = LveTexture::createTextureFromRgba(
-            device,
-            image.pixels.data(),
-            image.width,
-            image.height);
-          texture = std::shared_ptr<LveTexture>(std::move(uniqueTex));
-        } else {
-          std::cerr << "Failed to decode embedded model texture";
-          if (!texError.empty()) {
-            std::cerr << ": " << texError;
-          }
-          std::cerr << "\n";
-        }
-      }
-
-      materialTextures[i] = texture;
-    }
-
     try {
       return std::make_shared<LveModel>(device, data, std::move(materialTextures));
     } catch (const std::exception &e) {

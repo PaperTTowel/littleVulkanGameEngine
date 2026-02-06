@@ -28,14 +28,6 @@ namespace lve::backend {
     renderContext.endSwapChainRenderPass(reinterpret_cast<VkCommandBuffer>(commandBuffer));
   }
 
-  void VulkanRenderBackend::ensureOffscreenTargets(
-    std::uint32_t sceneWidth,
-    std::uint32_t sceneHeight,
-    std::uint32_t gameWidth,
-    std::uint32_t gameHeight) {
-    renderContext.ensureOffscreenTargets(sceneWidth, sceneHeight, gameWidth, gameHeight);
-  }
-
   bool VulkanRenderBackend::wasSwapChainRecreated() const {
     return renderContext.wasSwapChainRecreated();
   }
@@ -48,14 +40,6 @@ namespace lve::backend {
     return renderContext.getSwapChainImageCount();
   }
 
-  DescriptorSetHandle VulkanRenderBackend::getSceneViewDescriptor() const {
-    return reinterpret_cast<DescriptorSetHandle>(renderContext.getSceneViewDescriptor());
-  }
-
-  DescriptorSetHandle VulkanRenderBackend::getGameViewDescriptor() const {
-    return reinterpret_cast<DescriptorSetHandle>(renderContext.getGameViewDescriptor());
-  }
-
   float VulkanRenderBackend::getAspectRatio() const {
     return renderer.getAspectRatio();
   }
@@ -65,23 +49,19 @@ namespace lve::backend {
   }
 
   void VulkanRenderBackend::setWireframe(bool enabled) {
-    renderContext.simpleSystem().setWireframe(enabled);
+    (void)enabled;
   }
 
   void VulkanRenderBackend::setNormalView(bool enabled) {
-    renderContext.simpleSystem().setNormalView(enabled);
+    (void)enabled;
   }
 
-  void VulkanRenderBackend::renderSceneView(
+  void VulkanRenderBackend::renderMainView(
     float frameTime,
     LveCamera &camera,
     std::vector<LveGameObject*> &objects,
     CommandBufferHandle commandBuffer) {
     VkCommandBuffer vkCommandBuffer = reinterpret_cast<VkCommandBuffer>(commandBuffer);
-    if (!renderContext.beginSceneViewRenderPass(vkCommandBuffer)) {
-      return;
-    }
-
     FrameInfo frameInfo = renderContext.makeFrameInfo(
       frameTime,
       camera,
@@ -92,42 +72,9 @@ namespace lve::backend {
     ubo.projection = camera.getProjection();
     ubo.view = camera.getView();
     ubo.inverseView = camera.getInverseView();
-    renderContext.pointLightSystem().update(frameInfo, ubo);
     renderContext.updateGlobalUbo(frameInfo.frameIndex, ubo);
 
-    renderContext.simpleSystem().renderGameObjects(frameInfo);
-    renderContext.pointLightSystem().render(frameInfo);
     renderContext.spriteSystem().renderSprites(frameInfo);
-    renderContext.endSceneViewRenderPass(vkCommandBuffer);
-  }
-
-  void VulkanRenderBackend::renderGameView(
-    float frameTime,
-    LveCamera &camera,
-    std::vector<LveGameObject*> &objects,
-    CommandBufferHandle commandBuffer) {
-    VkCommandBuffer vkCommandBuffer = reinterpret_cast<VkCommandBuffer>(commandBuffer);
-    if (!renderContext.beginGameViewRenderPass(vkCommandBuffer)) {
-      return;
-    }
-
-    FrameInfo frameInfo = renderContext.makeFrameInfo(
-      frameTime,
-      camera,
-      objects,
-      vkCommandBuffer);
-
-    GlobalUbo ubo{};
-    ubo.projection = camera.getProjection();
-    ubo.view = camera.getView();
-    ubo.inverseView = camera.getInverseView();
-    renderContext.pointLightSystem().update(frameInfo, ubo);
-    renderContext.updateGlobalUbo(frameInfo.frameIndex, ubo);
-
-    renderContext.simpleSystem().renderGameObjects(frameInfo);
-    renderContext.pointLightSystem().render(frameInfo);
-    renderContext.spriteSystem().renderSprites(frameInfo);
-    renderContext.endGameViewRenderPass(vkCommandBuffer);
   }
 
 } // namespace lve::backend

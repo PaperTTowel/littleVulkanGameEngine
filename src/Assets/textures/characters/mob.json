@@ -1,0 +1,12 @@
+{
+  "texture": "Assets/textures/characters/mob.png",
+  "cols": 1,
+  "rows": 1,
+  "pixelsPerUnit": 8,
+  "hp": 3,
+  "spawnInterval": 2.0,
+  "size": [8, 8],
+  "states": {
+    "idle": { "row": 0, "start": 0, "frames": 1, "fps": 1, "loop": true }
+  }
+}

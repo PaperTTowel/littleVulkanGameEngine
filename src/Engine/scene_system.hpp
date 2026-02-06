@@ -59,6 +59,7 @@ namespace lve {
     void loadSceneFromFile(const std::string &path, std::optional<LveGameObject::id_t> protectedId);
 
     std::shared_ptr<backend::RenderModel> loadModelCached(const std::string &path);
+    std::shared_ptr<backend::RenderTexture> loadTextureCached(const std::string &path);
     std::shared_ptr<backend::RenderMaterial> loadMaterialCached(const std::string &path);
     bool updateMaterialFromData(const std::string &path, const MaterialData &data);
     bool applyMaterialToObject(LveGameObject &obj, const std::string &path);
@@ -70,6 +71,15 @@ namespace lve {
       const glm::vec3 &position,
       ObjectState state = ObjectState::IDLE,
       const std::string &metaPath = "Assets/textures/characters/player.json");
+    LveGameObject &createTileSpriteObject(
+      const glm::vec3 &position,
+      const std::shared_ptr<backend::RenderTexture> &texture,
+      int atlasCols,
+      int atlasRows,
+      int rowIndex,
+      int startFrame,
+      const glm::vec3 &scale,
+      int renderOrder);
     LveGameObject &createMeshObject(
       const glm::vec3 &position,
       const std::string &modelPath = "Assets/models/colored_cube.obj");
@@ -109,6 +119,7 @@ namespace lve {
     std::shared_ptr<backend::RenderModel> spriteModel;
     std::unordered_map<std::string, std::shared_ptr<backend::RenderModel>> modelCache;
     std::unordered_map<std::string, std::shared_ptr<backend::RenderMaterial>> materialCache;
+    std::unordered_map<std::string, std::shared_ptr<backend::RenderTexture>> textureCache;
     LveGameObject::id_t characterId{0};
   };
 } // namespace lve

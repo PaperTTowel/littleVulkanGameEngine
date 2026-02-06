@@ -1,25 +1,13 @@
 {
-  "size": [33, 44],
-  "pivot": [0.5, 0.0],
-  "atlas": { "cols": 6, "rows": 1 },
-  "states": {
-    "idle": {
-      "texture": "Assets/textures/characters/playerIDLE.png",
-      "row": 0,
-      "frames": 6,
-      "fps": 6.67,
-      "cols": 6,
-      "rows": 1,
-      "loop": true
-    },
-    "walking": {
-      "texture": "Assets/textures/characters/playerWalking.png",
-      "row": 0,
-      "frames": 8,
-      "fps": 8.0,
-      "cols": 8,
-      "rows": 1,
-      "loop": true
+    "texture": "Assets/textures/characters/Player.png",
+    "cols": 8,
+    "rows": 11,
+    "pixelsPerUnit": 8,
+    "size": [8, 8],
+    "states": {
+      "walking":      { "row": 0, "start": 0, "frames": 8, "fps": 8, "loop": true },
+      "walking_flip": { "row": 1, "start": 0, "frames": 8, "fps": 8, "loop": true },
+      "idle":         { "row": 4, "start": 0, "frames": 4, "fps": 6, "loop": true },
+      "idle_flip":    { "row": 5, "start": 0, "frames": 4, "fps": 6, "loop": true }
     }
   }
-}

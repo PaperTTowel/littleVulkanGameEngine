@@ -4,9 +4,7 @@
 #include "Engine/Backend/Vulkan/Core/device.hpp"
 #include "Engine/Backend/Vulkan/Core/buffer.hpp"
 #include "Engine/Backend/Vulkan/Render/frame_info.hpp"
-#include "Engine/Backend/Vulkan/Render/point_light_system.hpp"
 #include "Engine/Backend/Vulkan/Render/renderer.hpp"
-#include "Engine/Backend/Vulkan/Render/simple_render_system.hpp"
 #include "Engine/Backend/Vulkan/Render/sprite_render_system.hpp"
 
 // std
@@ -24,48 +22,19 @@ namespace lve {
     void endFrame();
     void beginSwapChainRenderPass(VkCommandBuffer commandBuffer);
     void endSwapChainRenderPass(VkCommandBuffer commandBuffer);
-    bool beginSceneViewRenderPass(VkCommandBuffer commandBuffer);
-    void endSceneViewRenderPass(VkCommandBuffer commandBuffer);
-    bool beginGameViewRenderPass(VkCommandBuffer commandBuffer);
-    void endGameViewRenderPass(VkCommandBuffer commandBuffer);
-    void ensureOffscreenTargets(uint32_t sceneWidth, uint32_t sceneHeight, uint32_t gameWidth, uint32_t gameHeight);
 
     bool wasSwapChainRecreated() const;
     void clearSwapChainRecreated();
     VkRenderPass getSwapChainRenderPass() const;
     size_t getSwapChainImageCount() const { return lveRenderer.getSwapChainImageCount(); }
-    VkDescriptorSet getSceneViewDescriptor() const;
-    VkDescriptorSet getGameViewDescriptor() const;
-    VkExtent2D getSceneViewExtent() const;
-    VkExtent2D getGameViewExtent() const;
 
     FrameInfo makeFrameInfo(float frameTime, LveCamera &camera, std::vector<LveGameObject*> &gameObjects, VkCommandBuffer commandBuffer);
     void updateGlobalUbo(int frameIndex, const GlobalUbo &ubo);
 
-    SimpleRenderSystem &simpleSystem() { return *simpleRenderSystem; }
     SpriteRenderSystem &spriteSystem() { return *spriteRenderSystem; }
-    PointLightSystem &pointLightSystem() { return *pointLightSystemPtr; }
 
   private:
-    struct OffscreenTarget {
-      VkExtent2D extent{};
-      VkImage colorImage{VK_NULL_HANDLE};
-      VkDeviceMemory colorMemory{VK_NULL_HANDLE};
-      VkImageView colorView{VK_NULL_HANDLE};
-      VkImage depthImage{VK_NULL_HANDLE};
-      VkDeviceMemory depthMemory{VK_NULL_HANDLE};
-      VkImageView depthView{VK_NULL_HANDLE};
-      VkFramebuffer framebuffer{VK_NULL_HANDLE};
-      VkSampler sampler{VK_NULL_HANDLE};
-      VkDescriptorSet imguiDescriptor{VK_NULL_HANDLE};
-    };
-
     void createBuffersAndDescriptors();
-    void createOffscreenRenderPass();
-    void destroyOffscreenRenderPass();
-    void destroyOffscreenTarget(OffscreenTarget &target);
-    void createOffscreenTarget(OffscreenTarget &target, VkExtent2D extent);
-    void beginOffscreenRenderPass(VkCommandBuffer commandBuffer, const OffscreenTarget &target);
     void createRenderSystems();
 
     LveDevice &lveDevice;
@@ -77,15 +46,8 @@ namespace lve {
     std::unique_ptr<LveDescriptorSetLayout> globalSetLayout;
     std::vector<VkDescriptorSet> globalDescriptorSets;
 
-    std::unique_ptr<SimpleRenderSystem> simpleRenderSystem;
     std::unique_ptr<SpriteRenderSystem> spriteRenderSystem;
-    std::unique_ptr<PointLightSystem> pointLightSystemPtr;
 
-    VkRenderPass offscreenRenderPass{VK_NULL_HANDLE};
-    VkFormat offscreenColorFormat{VK_FORMAT_UNDEFINED};
-    VkFormat offscreenDepthFormat{VK_FORMAT_UNDEFINED};
-    OffscreenTarget sceneViewTarget{};
-    OffscreenTarget gameViewTarget{};
     bool swapChainRecreated{false};
   };
 } // namespace lve

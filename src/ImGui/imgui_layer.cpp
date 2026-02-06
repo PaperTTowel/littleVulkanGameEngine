@@ -1,6 +1,7 @@
 #include "imgui_layer.hpp"
 
 #include "Engine/Backend/Vulkan/Render/renderer.hpp"
+#include "Game/player_controller.hpp"
 
 #include <imgui.h>
 #include <backends/imgui_impl_glfw.h>
@@ -86,9 +87,11 @@ void ImGuiLayer::buildUI(
   float frameTime,
   const glm::vec3 &cameraPos,
   const glm::vec3 &cameraRot,
+  const std::string &tileDebugText,
   bool &wireframeEnabled,
   bool &normalViewEnabled,
   bool &useOrthoCamera,
+  lve::game::PlayerTuning &playerTuning,
   bool &showEngineStats) {
 
   ImGuiDockNodeFlags dockspaceFlags = ImGuiDockNodeFlags_PassthruCentralNode;
@@ -138,9 +141,27 @@ void ImGuiLayer::buildUI(
     ImGui::Text("Camera Rot: [%.2f, %.2f, %.2f]", cameraRot.x, cameraRot.y, cameraRot.z);
 
     ImGui::Separator();
+    ImGui::TextUnformatted("Tile Debug:");
+    if (!tileDebugText.empty()) {
+      ImGui::TextUnformatted(tileDebugText.c_str());
+    } else {
+      ImGui::TextUnformatted("n/a");
+    }
+
+    ImGui::Separator();
     ImGui::Checkbox("Wireframe", &wireframeEnabled);
     ImGui::Checkbox("Normal view (shader toggle)", &normalViewEnabled);
     ImGui::Checkbox("Ortho camera", &useOrthoCamera);
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("Player Tuning");
+    ImGui::Checkbox("Gravity##toggle", &playerTuning.gravityEnabled);
+    ImGui::Checkbox("Snap to grid", &playerTuning.snapEnabled);
+    ImGui::SliderFloat("Move speed", &playerTuning.moveSpeed, 0.1f, 10.0f, "%.2f");
+    ImGui::SliderFloat("Gravity##value", &playerTuning.gravity, 0.0f, 50.0f, "%.2f");
+    ImGui::SliderFloat("Terminal vel", &playerTuning.terminalVelocity, 1.0f, 50.0f, "%.2f");
+    ImGui::SliderFloat("Jump speed", &playerTuning.jumpSpeed, 1.0f, 30.0f, "%.2f");
+    ImGui::SliderFloat("Jump probe", &playerTuning.jumpProbe, 0.0f, 1.0f, "%.2f");
 
     ImGui::End();
   }
@@ -176,5 +197,3 @@ void ImGuiLayer::shutdown() {
 }
 
 } // namespace lve
-
-

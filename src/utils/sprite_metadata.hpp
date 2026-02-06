@@ -11,6 +11,7 @@ namespace lve {
 
   struct SpriteStateInfo {
     int row = 0;
+    int startFrame = 0;
     int frameCount = 1;
     float frameDuration = 0.15f;
     bool loop = true;
@@ -20,8 +21,12 @@ namespace lve {
   };
 
   struct SpriteMetadata {
+    std::string texturePath; // optional default texture (single atlas)
     int atlasCols = 1;
     int atlasRows = 1;
+    float pixelsPerUnit = 1.0f;
+    float hp = 1.0f;
+    float spawnInterval = 0.0f;
     glm::vec2 size{1.f, 1.f};   // original pixel size of a single frame
     glm::vec2 pivot{0.5f, 0.5f}; // normalized pivot (0..1)
     std::unordered_map<std::string, SpriteStateInfo> states;

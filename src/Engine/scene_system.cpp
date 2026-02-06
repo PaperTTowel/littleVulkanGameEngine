@@ -1,6 +1,7 @@
 #include "scene_system.hpp"
 
 // std
+#include <algorithm>
 #include <iostream>
 #include <vector>
 
@@ -15,6 +16,14 @@ namespace lve {
       return glm::length(transform.translation) < eps &&
         glm::length(transform.rotation) < eps &&
         glm::length(transform.scale - glm::vec3(1.f)) < eps;
+    }
+
+    bool sortByRenderOrder(const LveGameObject *a, const LveGameObject *b) {
+      if (!a || !b) return a != nullptr;
+      if (a->renderOrder == b->renderOrder) {
+        return a->getId() < b->getId();
+      }
+      return a->renderOrder < b->renderOrder;
     }
   } // namespace
 
@@ -78,6 +87,7 @@ namespace lve {
     for (auto &kv : gameObjectManager.gameObjects) {
       out.push_back(&kv.second);
     }
+    std::sort(out.begin(), out.end(), sortByRenderOrder);
   }
 
   void SceneSystem::collectObjects(std::vector<const LveGameObject*> &out) const {
@@ -86,6 +96,9 @@ namespace lve {
     for (const auto &kv : gameObjectManager.gameObjects) {
       out.push_back(&kv.second);
     }
+    std::sort(out.begin(), out.end(), [](const LveGameObject *a, const LveGameObject *b) {
+      return sortByRenderOrder(a, b);
+    });
   }
 
   void SceneSystem::updateBuffers(int frameIndex) {
@@ -160,6 +173,23 @@ namespace lve {
     }
     materialCache[path] = material;
     return material;
+  }
+
+  std::shared_ptr<backend::RenderTexture> SceneSystem::loadTextureCached(const std::string &path) {
+    if (path.empty()) return {};
+    const std::string assetPath = path;
+    auto it = textureCache.find(assetPath);
+    if (it != textureCache.end()) {
+      return it->second;
+    }
+    const std::string resolvedPath = assetDatabase.resolveAssetPath(assetPath);
+    auto texture = assetFactory.loadTexture(resolvedPath);
+    if (!texture) {
+      std::cerr << "Failed to load texture " << resolvedPath << "\n";
+      return {};
+    }
+    textureCache[assetPath] = texture;
+    return texture;
   }
 
   bool SceneSystem::updateMaterialFromData(const std::string &path, const MaterialData &data) {
@@ -302,7 +332,8 @@ namespace lve {
     obj.name = "Sprite " + std::to_string(obj.getId());
     obj.enableTextureType = 1;
     obj.isSprite = true;
-    obj.billboardMode = BillboardMode::Cylindrical;
+    obj.billboardMode = BillboardMode::None;
+    obj.renderOrder = 1000;
     obj.spriteMetaPath = metaPath;
     obj.transform.translation = position;
     obj.transform.rotation = {0.f, 0.f, 0.f};
@@ -311,6 +342,41 @@ namespace lve {
     if (spriteAnimator) {
       spriteAnimator->applySpriteState(obj, state);
     }
+    return obj;
+  }
+
+  LveGameObject &SceneSystem::createTileSpriteObject(
+    const glm::vec3 &position,
+    const std::shared_ptr<backend::RenderTexture> &texture,
+    int atlasCols,
+    int atlasRows,
+    int rowIndex,
+    int startFrame,
+    const glm::vec3 &scale,
+    int renderOrder) {
+    if (!spriteModel) {
+      spriteModel = loadModelCached("Assets/models/quad.obj");
+    }
+    auto &obj = gameObjectManager.createGameObject();
+    obj.model = spriteModel;
+    obj.name = "Tile " + std::to_string(obj.getId());
+    obj.enableTextureType = 1;
+    obj.isSprite = true;
+    obj.billboardMode = BillboardMode::None;
+    obj.renderOrder = renderOrder;
+    obj.diffuseMap = texture ? texture : assetFactory.getDefaultTexture();
+    obj.atlasColumns = atlasCols > 0 ? atlasCols : 1;
+    obj.atlasRows = atlasRows > 0 ? atlasRows : 1;
+    obj.spriteState = {};
+    obj.spriteState.row = rowIndex;
+    obj.spriteState.startFrame = startFrame;
+    obj.spriteState.frameCount = 1;
+    obj.hasSpriteState = true;
+    obj.currentFrame = 0;
+    obj.transform.translation = position;
+    obj.transform.rotation = {0.f, 0.f, 0.f};
+    obj.transform.scale = scale;
+    obj.transformDirty = true;
     return obj;
   }
 
@@ -369,7 +435,8 @@ namespace lve {
     obj.name = "Sprite " + std::to_string(obj.getId());
     obj.enableTextureType = 1;
     obj.isSprite = true;
-    obj.billboardMode = BillboardMode::Cylindrical;
+    obj.billboardMode = BillboardMode::None;
+    obj.renderOrder = 1000;
     obj.spriteMetaPath = metaPath;
     obj.transform.translation = position;
     obj.transform.rotation = {0.f, 0.f, 0.f};
@@ -662,10 +729,7 @@ namespace lve {
     assetDatabase.setRootPath(assetDefaults.rootPath);
     assetDatabase.initialize();
 
-    cubeModel = loadModelCached(assetDefaults.activeMeshPath);
     spriteModel = loadModelCached("Assets/models/quad.obj");
-
-    createMeshObject({-.5f, .5f, 0.f}, assetDefaults.activeMeshPath);
 
     const std::string defaultMetaPath = assetDefaults.activeSpriteMetaPath;
     if (!loadSpriteMetadata(defaultMetaPath, playerMeta)) {
@@ -685,23 +749,6 @@ namespace lve {
     auto &characterObj = createSpriteObject({0.f, 0.f, 0.f}, ObjectState::IDLE, assetDefaults.activeSpriteMetaPath);
     characterId = characterObj.getId();
 
-    std::vector<glm::vec3> lightColors{
-        {1.f, .1f, .1f},
-        {.1f, .1f, 1.f},
-        {.1f, 1.f, .1f},
-        {1.f, 1.f, .1f},
-        {.1f, 1.f, 1.f},
-        {1.f, 1.f, 1.f}};
-
-    for (int i = 0; i < lightColors.size(); i++) {
-      auto &pointLight = gameObjectManager.makePointLight(0.2f);
-      pointLight.color = lightColors[i];
-      auto rotateLight = glm::rotate(
-        glm::mat4(1.f),
-        (i * glm::two_pi<float>()) / lightColors.size(),
-        {0.f, -1.f, 0.f});
-      pointLight.transform.translation = glm::vec3(rotateLight * glm::vec4(-1.f, -1.f, -1.f, -1.f));
-    }
   }
 } // namespace lve
 

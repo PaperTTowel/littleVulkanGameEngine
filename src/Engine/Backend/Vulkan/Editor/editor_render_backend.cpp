@@ -35,17 +35,21 @@ namespace lve::backend {
     float frameTime,
     const glm::vec3 &cameraPos,
     const glm::vec3 &cameraRot,
+    const std::string &tileDebugText,
     bool &wireframeEnabled,
     bool &normalViewEnabled,
     bool &useOrthoCamera,
+    lve::game::PlayerTuning &playerTuning,
     bool &showEngineStats) {
     imgui.buildUI(
       frameTime,
       cameraPos,
       cameraRot,
+      tileDebugText,
       wireframeEnabled,
       normalViewEnabled,
       useOrthoCamera,
+      playerTuning,
       showEngineStats);
   }
 

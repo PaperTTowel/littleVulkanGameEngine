@@ -54,6 +54,16 @@ namespace lve {
       return defaultValue;
     }
 
+    std::string parseStringBefore(const std::string &src, const std::string &key, std::size_t endPos, const std::string &defaultValue) {
+      const std::string slice = (endPos == std::string::npos) ? src : src.substr(0, endPos);
+      return parseString(slice, key, defaultValue);
+    }
+
+    int parseIntBefore(const std::string &src, const std::string &key, std::size_t endPos, int defaultValue) {
+      const std::string slice = (endPos == std::string::npos) ? src : src.substr(0, endPos);
+      return parseInt(slice, key, defaultValue);
+    }
+
     glm::vec2 parseVec2(const std::string &src, const std::string &key, glm::vec2 defaultValue) {
       std::regex re("\"" + key + "\"\\s*:\\s*\\[\\s*(-?\\d+(?:\\.\\d+)?)\\s*,\\s*(-?\\d+(?:\\.\\d+)?)\\s*\\]");
       std::smatch match;
@@ -92,8 +102,14 @@ namespace lve {
       return false;
     }
 
-    outMetadata.atlasCols = parseInt(content, "cols", outMetadata.atlasCols);
-    outMetadata.atlasRows = parseInt(content, "rows", outMetadata.atlasRows);
+    const std::size_t statesPos = content.find("\"states\"");
+    outMetadata.texturePath = parseStringBefore(content, "texture", statesPos, outMetadata.texturePath);
+    outMetadata.atlasCols = parseIntBefore(content, "cols", statesPos, outMetadata.atlasCols);
+    outMetadata.atlasRows = parseIntBefore(content, "rows", statesPos, outMetadata.atlasRows);
+    outMetadata.pixelsPerUnit = parseFloat(content, "pixelsPerUnit", outMetadata.pixelsPerUnit);
+    outMetadata.pixelsPerUnit = parseFloat(content, "ppu", outMetadata.pixelsPerUnit);
+    outMetadata.hp = parseFloat(content, "hp", outMetadata.hp);
+    outMetadata.spawnInterval = parseFloat(content, "spawnInterval", outMetadata.spawnInterval);
     outMetadata.size = parseVec2(content, "size", outMetadata.size);
     outMetadata.pivot = parseVec2(content, "pivot", outMetadata.pivot);
 
@@ -113,6 +129,8 @@ namespace lve {
         SpriteStateInfo state{};
         state.texturePath = parseString(body, "texture", "");
         state.row = parseInt(body, "row", state.row);
+        state.startFrame = parseInt(body, "startFrame", state.startFrame);
+        state.startFrame = parseInt(body, "start", state.startFrame);
         state.frameCount = parseInt(body, "frames", state.frameCount);
         float fps = parseFloat(body, "fps", 0.0f);
         if (fps > 0.0f) {

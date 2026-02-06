@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(PaperTTowelEngine LANGUAGES CXX)
+project(2dVK LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc /utf-8")
 endif()
 
 # Dependencies
@@ -17,26 +17,29 @@ file(GLOB IMGUI_SOURCES
     "external/imgui/backends/imgui_impl_glfw.cpp"
     "external/imgui/backends/imgui_impl_vulkan.cpp"
 )
-file(GLOB IMGUIZMO_SOURCES
-    "external/imguiZmo/*.cpp"
-)
-
-set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
-add_subdirectory(external/assimp)
 
 file(GLOB_RECURSE SOURCES
     "src/*.cpp" "src/*.hpp"
     "src/Editor/*.cpp" "src/Editor/*.hpp"
     "src/Engine/*.cpp" "src/Engine/*.hpp"
+    "src/Game/*.cpp" "src/Game/*.hpp"
     "src/ImGui/*.cpp" "src/ImGui/*.hpp"
     "src/utils/*.cpp" "src/utils/*.hpp"
 )
 list(FILTER SOURCES EXCLUDE REGEX ".*/src/Engine/Backend/[^/]+\\.(cpp|hpp)$")
 list(FILTER SOURCES EXCLUDE REGEX ".*/src/Rendering/.*\\.(cpp|hpp)$")
+list(FILTER SOURCES EXCLUDE REGEX ".*/src/Engine/IO/model_io\\.(cpp|hpp)$")
 
-add_executable(${PROJECT_NAME} ${SOURCES} ${IMGUI_SOURCES} ${IMGUIZMO_SOURCES})
+set(WINDOWS_ICON_RC "")
+if(WIN32)
+    set(WINDOWS_ICON_RC "${CMAKE_CURRENT_SOURCE_DIR}/src/Assets/textures/app_icon.rc")
+endif()
+
+if(WIN32)
+    add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${IMGUI_SOURCES} ${WINDOWS_ICON_RC})
+else()
+    add_executable(${PROJECT_NAME} ${SOURCES} ${IMGUI_SOURCES} ${WINDOWS_ICON_RC})
+endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     "src"
@@ -44,9 +47,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "external/glm"
     "external/imgui"
     "external/imgui/backends"
-    "external/imguiZmo"
+    "external/miniaudio"
     "external/stbimage"
-    "external/assimp/include"
+    "external/rapidjson/include"
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
@@ -54,8 +57,11 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Vulkan::Vulkan
     "${CMAKE_CURRENT_SOURCE_DIR}/external/glfw/lib-vc2022/glfw3.lib"
-    assimp
 )
+
+if(WIN32 AND MSVC)
+    target_link_options(${PROJECT_NAME} PRIVATE "/ENTRY:mainCRTStartup")
+endif()
 
 # Shader build
 find_program(GLSL_VALIDATOR glslangValidator HINTS
@@ -119,16 +125,16 @@ if(WIN32)
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
         COMMENT "Copying glfw3.dll to output directory"
     )
-endif()
 
-if(WIN32)
-    add_custom_command(
-        TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-            "$<TARGET_FILE:assimp>"
-            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-        COMMENT "Copying assimp DLL to output directory"
-    )
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/Assets/textures/icon.ico")
+        add_custom_command(
+            TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/src/Assets/textures/icon.ico"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/icon.ico"
+            COMMENT "Copying icon.ico to output directory"
+        )
+    endif()
 endif()
 
 add_custom_command(

@@ -36,7 +36,10 @@ layout(push_constant) uniform Push {
   int debugView;
   int atlasCols;
   int atlasRows;
+  int startFrame;
   int rowIndex;
+  int uvTransformFlags;
+  vec4 uvOffset;
 } push;
 
 void main() {

@@ -179,16 +179,16 @@ namespace lve {
   void LveModel::calculateBoundingBox(
     const std::vector<backend::ModelVertex>& vertices,
     const std::vector<uint32_t>& indices) {
-    glm::vec3 min(std::numeric_limits<float>::max());
-    glm::vec3 max(std::numeric_limits<float>::lowest());
+    glm::vec3 boundsMin((std::numeric_limits<float>::max)());
+    glm::vec3 boundsMax((std::numeric_limits<float>::lowest)());
 
     if (nodes.empty() || subMeshes.empty() || indices.empty()) {
       for (const auto& vertex : vertices) {
-        min = glm::min(min, vertex.position);
-        max = glm::max(max, vertex.position);
+        boundsMin = (glm::min)(boundsMin, vertex.position);
+        boundsMax = (glm::max)(boundsMax, vertex.position);
       }
-      boundingBox.min = min;
-      boundingBox.max = max;
+      boundingBox.min = boundsMin;
+      boundingBox.max = boundsMax;
       return;
     }
 
@@ -209,14 +209,14 @@ namespace lve {
           if (vertexIndex >= vertices.size()) continue;
           const glm::vec4 pos = nodeTransform * glm::vec4(vertices[vertexIndex].position, 1.f);
           const glm::vec3 pos3{pos.x, pos.y, pos.z};
-          min = glm::min(min, pos3);
-          max = glm::max(max, pos3);
+          boundsMin = (glm::min)(boundsMin, pos3);
+          boundsMax = (glm::max)(boundsMax, pos3);
         }
       }
     }
 
-    boundingBox.min = min;
-    boundingBox.max = max;
+    boundingBox.min = boundsMin;
+    boundingBox.max = boundsMax;
   }
 
   std::vector<VkVertexInputBindingDescription> LveModel::getBindingDescriptions() {

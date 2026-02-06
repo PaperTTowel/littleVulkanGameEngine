@@ -1,5 +1,22 @@
 #include "Engine/Backend/Window/window.hpp"
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#ifndef GLFW_EXPOSE_NATIVE_WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
+#endif
+#include <GLFW/glfw3native.h>
+#include <array>
+#include <filesystem>
+#endif
+
+#include <iostream>
 #include <stdexcept>
 #include <utility>
 
@@ -22,6 +39,17 @@ namespace lve {
   }
 
   LveWindow::~LveWindow() {
+#ifdef _WIN32
+    if (windowIconLarge) {
+      DestroyIcon(reinterpret_cast<HICON>(windowIconLarge));
+      windowIconLarge = nullptr;
+    }
+    if (windowIconSmall) {
+      DestroyIcon(reinterpret_cast<HICON>(windowIconSmall));
+      windowIconSmall = nullptr;
+    }
+#endif
+
     if (window) {
       glfwDestroyWindow(window);
       window = nullptr;
@@ -47,9 +75,88 @@ namespace lve {
       throw std::runtime_error("Failed to create GLFW window");
     }
 
+#ifdef _WIN32
+    setWindowIconWin32();
+#endif
+
     glfwSetWindowUserPointer(window, this);
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+    glfwSetScrollCallback(window, scrollCallback);
   }
+
+#ifdef _WIN32
+  void LveWindow::setWindowIconWin32() {
+    if (!window) {
+      return;
+    }
+
+    namespace fs = std::filesystem;
+    const std::array<fs::path, 8> candidates{{
+      fs::path{"Assets/textures/icon.ico"},
+      fs::path{"../Assets/textures/icon.ico"},
+      fs::path{"../../Assets/textures/icon.ico"},
+      fs::path{"../../../Assets/textures/icon.ico"},
+      fs::path{"../../../../Assets/textures/icon.ico"},
+      fs::path{"src/Assets/textures/icon.ico"},
+      fs::path{"../src/Assets/textures/icon.ico"},
+      fs::path{"icon.ico"},
+    }};
+
+    fs::path iconPath{};
+    for (const auto &candidate : candidates) {
+      if (fs::exists(candidate)) {
+        iconPath = candidate;
+        break;
+      }
+    }
+    if (iconPath.empty()) {
+      std::cerr << "Window icon not found (expected Assets/textures/icon.ico).\n";
+      return;
+    }
+
+    const int iconW = GetSystemMetrics(SM_CXICON);
+    const int iconH = GetSystemMetrics(SM_CYICON);
+    const int smallW = GetSystemMetrics(SM_CXSMICON);
+    const int smallH = GetSystemMetrics(SM_CYSMICON);
+    const std::wstring iconPathWide = iconPath.wstring();
+
+    HICON hIconLarge = static_cast<HICON>(LoadImageW(
+      nullptr,
+      iconPathWide.c_str(),
+      IMAGE_ICON,
+      iconW,
+      iconH,
+      LR_LOADFROMFILE));
+    HICON hIconSmall = static_cast<HICON>(LoadImageW(
+      nullptr,
+      iconPathWide.c_str(),
+      IMAGE_ICON,
+      smallW,
+      smallH,
+      LR_LOADFROMFILE));
+
+    if (!hIconLarge && !hIconSmall) {
+      std::cerr << "Failed to load window icon: " << iconPath.string() << "\n";
+      return;
+    }
+
+    HWND hwnd = glfwGetWin32Window(window);
+    if (!hwnd) {
+      if (hIconLarge) DestroyIcon(hIconLarge);
+      if (hIconSmall) DestroyIcon(hIconSmall);
+      return;
+    }
+
+    if (hIconLarge) {
+      SendMessage(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(hIconLarge));
+      windowIconLarge = hIconLarge;
+    }
+    if (hIconSmall) {
+      SendMessage(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(hIconSmall));
+      windowIconSmall = hIconSmall;
+    }
+  }
+#endif
 
   void LveWindow::pollEvents() { glfwPollEvents(); }
 
@@ -72,9 +179,21 @@ namespace lve {
 
   void LveWindow::framebufferResizeCallback(GLFWwindow *window, int width, int height) {
     auto lveWindow = reinterpret_cast<LveWindow *>(glfwGetWindowUserPointer(window));
+    if (!lveWindow) {
+      return;
+    }
     lveWindow->framebufferResized = true;
     lveWindow->width = width;
     lveWindow->height = height;
+  }
+
+  void LveWindow::scrollCallback(GLFWwindow *window, double xoffset, double yoffset) {
+    auto lveWindow = reinterpret_cast<LveWindow *>(glfwGetWindowUserPointer(window));
+    if (!lveWindow) {
+      return;
+    }
+    (void)xoffset;
+    lveWindow->scrollDeltaY += static_cast<float>(yoffset);
   }
 
 } // namespace lve

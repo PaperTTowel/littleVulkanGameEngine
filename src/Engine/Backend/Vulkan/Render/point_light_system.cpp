@@ -6,6 +6,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include "Engine/coords.hpp"
+
 // std
 #include <array>
 #include <cassert>
@@ -53,7 +55,7 @@ namespace lve{
         auto rotateLight = glm::rotate(
             glm::mat4(1.f),
             frameInfo.frameTime,
-            {0.f, -1.f, 0.f}
+            coords::kUp
         );
 
         int lightIndex = 0;

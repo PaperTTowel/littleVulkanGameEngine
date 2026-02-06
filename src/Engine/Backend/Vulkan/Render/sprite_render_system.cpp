@@ -24,7 +24,10 @@ namespace lve {
     int debugView;
     int atlasCols;
     int atlasRows;
+    int startFrame;
     int rowIndex;
+    int uvTransformFlags;
+    alignas(16) glm::vec4 uvOffset{0.f};
   };
 
   SpriteRenderSystem::SpriteRenderSystem(LveDevice &device, VkRenderPass renderPass, VkDescriptorSetLayout globalSetLayout)
@@ -197,7 +200,10 @@ namespace lve {
       push.debugView = 0;
       push.atlasCols = obj.atlasColumns;
       push.atlasRows = obj.atlasRows;
+      push.startFrame = obj.hasSpriteState ? obj.spriteState.startFrame : 0;
       push.rowIndex = obj.hasSpriteState ? obj.spriteState.row : 0;
+      push.uvTransformFlags = obj.uvTransformFlags;
+      push.uvOffset = {obj.uvOffset.x, obj.uvOffset.y, 0.f, 0.f};
 
       vkCmdPushConstants(
         frameInfo.commandBuffer,

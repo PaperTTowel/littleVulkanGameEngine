@@ -6,7 +6,12 @@
 #include <cstdint>
 #include <glm/vec3.hpp>
 
+namespace lve::game {
+  struct PlayerTuning;
+}
+
 namespace lve::backend {
+
   class EditorRenderBackend {
   public:
     virtual ~EditorRenderBackend() = default;
@@ -19,9 +24,11 @@ namespace lve::backend {
       float frameTime,
       const glm::vec3 &cameraPos,
       const glm::vec3 &cameraRot,
+      const std::string &tileDebugText,
       bool &wireframeEnabled,
       bool &normalViewEnabled,
       bool &useOrthoCamera,
+      lve::game::PlayerTuning &playerTuning,
       bool &showEngineStats) = 0;
     virtual void render(CommandBufferHandle commandBuffer) = 0;
     virtual void renderPlatformWindows() = 0;

@@ -57,6 +57,9 @@ namespace lve {
 
     std::string texturePath = stateInfo.texturePath;
     if (texturePath.empty()) {
+      texturePath = metadata.texturePath;
+    }
+    if (texturePath.empty()) {
       std::cerr << "Sprite state missing texture path: " << resolvedName << "\n";
       return false;
     }
@@ -73,11 +76,19 @@ namespace lve {
 
     const bool stateChanged = (resolvedName != character.spriteStateName);
     character.spriteState = stateInfo;
+    if (character.atlasRows > 0) {
+      character.spriteState.row = character.atlasRows - 1 - character.spriteState.row;
+    }
     character.hasSpriteState = true;
     character.spriteStateName = resolvedName;
 
-    float aspect = (metadata.size.y != 0.f) ? (metadata.size.x / metadata.size.y) : 1.f;
-    character.transform.scale = glm::vec3(aspect, 1.f, 1.f);
+    float ppu = metadata.pixelsPerUnit;
+    if (ppu <= 0.f) {
+      ppu = (metadata.size.y != 0.f) ? metadata.size.y : 1.f;
+    }
+    const float width = metadata.size.x / ppu;
+    const float height = metadata.size.y / ppu;
+    character.transform.scale = glm::vec3(width, height, 1.f);
     character.transformDirty = true;
 
     if (stateChanged) {

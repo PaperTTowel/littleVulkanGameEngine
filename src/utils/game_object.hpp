@@ -77,6 +77,10 @@ namespace lve {
   enum class Direction { UP, DOWN, LEFT, RIGHT };
   class LveGameObject {
   public:
+    static constexpr int kUvTransformFlipHorizontal = 1 << 0;
+    static constexpr int kUvTransformFlipVertical = 1 << 1;
+    static constexpr int kUvTransformFlipDiagonal = 1 << 2;
+
     using id_t = unsigned int;
     using Map = std::unordered_map<id_t, LveGameObject>;
     int enableTextureType{0};
@@ -95,6 +99,9 @@ namespace lve {
     std::string modelPath;
     std::string materialPath;
     std::string name;
+    int renderOrder{0};
+    int uvTransformFlags{0};
+    glm::vec2 uvOffset{0.f, 0.f};
 
     bool hasPhysics = false;
     bool transformDirty{true};
@@ -132,7 +139,7 @@ namespace lve {
 
   class LveGameObjectManager {
   public:
-    static constexpr int MAX_GAME_OBJECTS = 1000;
+    static constexpr int MAX_GAME_OBJECTS = 10000;
 
     LveGameObjectManager(
       backend::ObjectBufferPoolPtr objectBuffers,
