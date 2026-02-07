@@ -1,4 +1,5 @@
 #include "Engine/audio_system.hpp"
+#include "Engine/path_utils.hpp"
 
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
@@ -21,15 +22,6 @@ namespace lve {
       std::string displayName;
       std::string stemName;
     };
-
-    std::string toUtf8(const fs::path &path) {
-#if defined(__cpp_char8_t)
-      const auto text = path.u8string();
-      return {text.begin(), text.end()};
-#else
-      return path.u8string();
-#endif
-    }
 
     std::string trimAscii(std::string value) {
       std::size_t start = 0;
@@ -69,7 +61,7 @@ namespace lve {
     }
 
     bool isSupportedAudioFile(const fs::path &path) {
-      std::string ext = normalizeKey(path.extension().string());
+      std::string ext = normalizeKey(pathutil::toUtf8(path.extension()));
       return ext == ".mp3" || ext == ".wav" || ext == ".ogg" || ext == ".flac";
     }
 
@@ -101,7 +93,7 @@ namespace lve {
       }
 
       insertClipAlias(clips, clip.stemName, clip);
-      insertClipAlias(clips, clip.path.filename().string(), clip);
+      insertClipAlias(clips, pathutil::toUtf8(clip.path.filename()), clip);
 
       if (!primary.empty()) {
         insertClipAlias(clips, std::string(categoryPrefix) + clip.displayName, clip);
@@ -192,7 +184,7 @@ namespace lve {
     impl->seClips.clear();
     impl->bgmOrder.clear();
 
-    const fs::path root{directoryPath};
+    const fs::path root{pathutil::fromUtf8(directoryPath)};
     if (!fs::exists(root)) {
       return false;
     }
@@ -227,7 +219,7 @@ namespace lve {
         continue;
       }
 
-      const std::string stemName = toUtf8(filePath.stem());
+      const std::string stemName = pathutil::toUtf8(filePath.stem());
       ClipInfo clip{};
       clip.path = filePath;
       clip.stemName = stemName;
@@ -242,7 +234,7 @@ namespace lve {
     }
 
     auto sortByPath = [](const ClipInfo &a, const ClipInfo &b) {
-      return normalizeKey(toUtf8(a.path)) < normalizeKey(toUtf8(b.path));
+      return normalizeKey(pathutil::toUtf8(a.path)) < normalizeKey(pathutil::toUtf8(b.path));
     };
     std::sort(discoveredBgm.begin(), discoveredBgm.end(), sortByPath);
     std::sort(discoveredSe.begin(), discoveredSe.end(), sortByPath);
@@ -283,7 +275,7 @@ namespace lve {
       nullptr,
       &impl->currentBgm);
 #else
-    const std::string filePath = toUtf8(clip->path);
+    const std::string filePath = pathutil::toUtf8(clip->path);
     result = ma_sound_init_from_file(
       &impl->engine,
       filePath.c_str(),
@@ -340,7 +332,7 @@ namespace lve {
       nullptr,
       sound.get());
 #else
-    const std::string filePath = toUtf8(clip->path);
+    const std::string filePath = pathutil::toUtf8(clip->path);
     result = ma_sound_init_from_file(
       &impl->engine,
       filePath.c_str(),

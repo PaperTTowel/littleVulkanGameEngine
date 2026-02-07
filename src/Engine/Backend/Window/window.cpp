@@ -1,4 +1,5 @@
 #include "Engine/Backend/Window/window.hpp"
+#include "Engine/path_utils.hpp"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -136,7 +137,7 @@ namespace lve {
       LR_LOADFROMFILE));
 
     if (!hIconLarge && !hIconSmall) {
-      std::cerr << "Failed to load window icon: " << iconPath.string() << "\n";
+      std::cerr << "Failed to load window icon: " << pathutil::toUtf8(iconPath) << "\n";
       return;
     }
 

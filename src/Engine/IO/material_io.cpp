@@ -1,4 +1,5 @@
 #include "Engine/IO/material_io.hpp"
+#include "Engine/path_utils.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -8,7 +9,7 @@
 namespace lve {
 
   namespace {
-    std::string readFileToString(const std::string &path) {
+    std::string readFileToString(const std::filesystem::path &path) {
       std::ifstream file(path, std::ios::in | std::ios::binary);
       if (!file) return {};
       std::ostringstream ss;
@@ -16,7 +17,7 @@ namespace lve {
       return ss.str();
     }
 
-    bool writeStringToFile(const std::string &path, const std::string &data) {
+    bool writeStringToFile(const std::filesystem::path &path, const std::string &data) {
       std::ofstream file(path, std::ios::out | std::ios::binary | std::ios::trunc);
       if (!file) return false;
       file << data;
@@ -112,7 +113,7 @@ namespace lve {
       return false;
     }
 
-    std::filesystem::path outputPath(path);
+    std::filesystem::path outputPath = pathutil::fromUtf8(path);
     std::error_code ec;
     if (outputPath.has_parent_path()) {
       std::filesystem::create_directories(outputPath.parent_path(), ec);
@@ -125,7 +126,7 @@ namespace lve {
     }
 
     const std::string materialName = data.name.empty()
-      ? outputPath.stem().string()
+      ? pathutil::toUtf8(outputPath.stem())
       : data.name;
 
     std::ostringstream ss;
@@ -147,7 +148,7 @@ namespace lve {
     ss << "  \"normalScale\": " << data.factors.normalScale << "\n";
     ss << "}\n";
 
-    if (!writeStringToFile(path, ss.str())) {
+    if (!writeStringToFile(outputPath, ss.str())) {
       if (outError) {
         *outError = "Failed to write material file";
       }
@@ -162,7 +163,7 @@ namespace lve {
     std::string *outError,
     const std::function<std::string(const std::string &)> &pathResolver) {
     const std::string resolvedPath = pathResolver ? pathResolver(path) : path;
-    const std::string content = readFileToString(resolvedPath);
+    const std::string content = readFileToString(pathutil::fromUtf8(resolvedPath));
     if (content.empty()) {
       if (outError) {
         *outError = "Failed to read material file";

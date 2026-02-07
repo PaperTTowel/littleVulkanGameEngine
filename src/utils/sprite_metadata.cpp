@@ -1,6 +1,8 @@
 #include "sprite_metadata.hpp"
+#include "Engine/path_utils.hpp"
 
 // std
+#include <filesystem>
 #include <fstream>
 #include <regex>
 #include <sstream>
@@ -8,7 +10,7 @@
 
 namespace lve {
   namespace {
-    std::string readFileToString(const std::string &path) {
+    std::string readFileToString(const std::filesystem::path &path) {
       std::ifstream file(path, std::ios::in | std::ios::binary);
       if (!file) {
         return {};
@@ -97,7 +99,7 @@ namespace lve {
   } // namespace
   
   bool loadSpriteMetadata(const std::string &filepath, SpriteMetadata &outMetadata) {
-    const std::string content = readFileToString(filepath);
+    const std::string content = readFileToString(pathutil::fromUtf8(filepath));
     if (content.empty()) {
       return false;
     }

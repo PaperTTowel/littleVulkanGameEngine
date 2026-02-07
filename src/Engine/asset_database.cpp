@@ -1,4 +1,5 @@
 #include "Engine/asset_database.hpp"
+#include "Engine/path_utils.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -24,7 +25,7 @@ namespace lve {
     }
 
     bool hasExtension(const fs::path &path, std::initializer_list<const char *> exts) {
-      const std::string ext = toLowerCopy(path.extension().string());
+      const std::string ext = toLowerCopy(pathutil::toUtf8(path.extension()));
       for (const char *candidate : exts) {
         if (ext == toLowerCopy(candidate)) {
           return true;
@@ -54,7 +55,7 @@ namespace lve {
       }
     }
 
-    std::string readFileToString(const std::string &path) {
+    std::string readFileToString(const fs::path &path) {
       std::ifstream file(path, std::ios::in | std::ios::binary);
       if (!file) return {};
       std::ostringstream ss;
@@ -62,7 +63,7 @@ namespace lve {
       return ss.str();
     }
 
-    bool writeStringToFile(const std::string &path, const std::string &data) {
+    bool writeStringToFile(const fs::path &path, const std::string &data) {
       std::ofstream file(path, std::ios::out | std::ios::binary | std::ios::trunc);
       if (!file) return false;
       file << data;
@@ -120,14 +121,14 @@ namespace lve {
     }
 
     std::string normalizePathString(const fs::path &path) {
-      return path.generic_string();
+      return pathutil::toGenericUtf8(path);
     }
 
     std::string makeAssetPath(const fs::path &root, const fs::path &absolutePath, const std::string &rootLabel) {
       std::error_code ec;
       fs::path relative = fs::relative(absolutePath, root, ec);
       if (ec) return normalizePathString(absolutePath);
-      fs::path combined = fs::path(rootLabel) / relative;
+      fs::path combined = pathutil::fromUtf8(rootLabel) / relative;
       return normalizePathString(combined);
     }
 
@@ -136,7 +137,7 @@ namespace lve {
     }
 
     AssetType detectJsonType(const fs::path &path) {
-      const std::string content = readFileToString(path.string());
+      const std::string content = readFileToString(path);
       if (content.find("\"entities\"") != std::string::npos) {
         return AssetType::Scene;
       }
@@ -147,7 +148,7 @@ namespace lve {
     }
 
     AssetType detectAssetType(const std::string &assetPath) {
-      fs::path path = assetPath;
+      fs::path path = pathutil::fromUtf8(assetPath);
       if (hasExtension(path, {".obj", ".fbx", ".gltf", ".glb"})) return AssetType::Model;
       if (hasExtension(path, {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr", ".tiff", ".ktx", ".ktx2"})) {
         return AssetType::Texture;
@@ -180,11 +181,11 @@ namespace lve {
         ss << "  }";
       }
       ss << "\n}\n";
-      return writeStringToFile(metaPath, ss.str());
+      return writeStringToFile(pathutil::fromUtf8(metaPath), ss.str());
     }
 
     bool loadMetaFile(const std::string &metaPath, AssetMeta &outMeta) {
-      const std::string content = readFileToString(metaPath);
+      const std::string content = readFileToString(pathutil::fromUtf8(metaPath));
       if (content.empty()) return false;
       outMeta.version = static_cast<int>(parseFloat(content, "version", outMeta.version));
       outMeta.guid = parseString(content, "guid", outMeta.guid);
@@ -216,7 +217,7 @@ namespace lve {
     guidToPath.clear();
     pathToMeta.clear();
 
-    fs::path root = rootPath;
+    fs::path root = pathutil::fromUtf8(rootPath);
     std::error_code ec;
     if (!fs::exists(root, ec)) {
       return;
@@ -238,7 +239,7 @@ namespace lve {
 
   std::string AssetDatabase::ensureMetaForAsset(const std::string &assetPath, const std::string &sourcePath) {
     if (assetPath.empty()) return {};
-    fs::path assetFsPath = assetPath;
+    fs::path assetFsPath = pathutil::fromUtf8(assetPath);
     std::string normalizedAssetPath = normalizePathString(assetFsPath);
     const std::string metaPath = metaPathForAsset(normalizedAssetPath);
 

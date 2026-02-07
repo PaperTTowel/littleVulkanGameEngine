@@ -1,4 +1,5 @@
 #include "Game/Tilemap/tiled_loader.hpp"
+#include "Engine/path_utils.hpp"
 
 #include <rapidjson/document.h>
 #include <rapidjson/error/en.h>
@@ -22,7 +23,7 @@ namespace lve::tilemap {
       }
     }
 
-    std::string readFileToString(const std::string &path) {
+    std::string readFileToString(const std::filesystem::path &path) {
       std::ifstream file(path, std::ios::in | std::ios::binary);
       if (!file) return {};
       std::ostringstream ss;
@@ -31,7 +32,7 @@ namespace lve::tilemap {
     }
 
     std::string normalizePath(const std::filesystem::path &path) {
-      return path.lexically_normal().generic_string();
+      return pathutil::toGenericUtf8(path);
     }
 
     std::string makeAssetRelative(const std::string &path) {
@@ -55,15 +56,15 @@ namespace lve::tilemap {
     }
 
     bool parseTsx(const std::filesystem::path &tsxPath, Tileset &tileset, std::string *outError) {
-      const std::string content = readFileToString(tsxPath.string());
+      const std::string content = readFileToString(tsxPath);
       if (content.empty()) {
-        setError(outError, "failed to read tsx: " + tsxPath.string());
+        setError(outError, "failed to read tsx: " + pathutil::toUtf8(tsxPath));
         return false;
       }
 
       std::smatch tilesetMatch;
       if (!std::regex_search(content, tilesetMatch, std::regex(R"(<tileset[^>]*>)"))) {
-        setError(outError, "tsx missing <tileset> tag: " + tsxPath.string());
+        setError(outError, "tsx missing <tileset> tag: " + pathutil::toUtf8(tsxPath));
         return false;
       }
       const std::string tilesetTag = tilesetMatch.str();
@@ -88,7 +89,7 @@ namespace lve::tilemap {
         if (!height.empty()) tileset.imageHeight = std::stoi(height);
 
         if (!source.empty()) {
-          std::filesystem::path imagePath = source;
+          std::filesystem::path imagePath = pathutil::fromUtf8(source);
           if (imagePath.is_relative()) {
             imagePath = tsxPath.parent_path() / imagePath;
           }
@@ -257,10 +258,10 @@ namespace lve::tilemap {
       return false;
     }
 
-    const std::filesystem::path mapPath = path;
+    const std::filesystem::path mapPath = pathutil::fromUtf8(path);
     const std::filesystem::path mapDir = mapPath.parent_path();
 
-    std::string content = readFileToString(path);
+    std::string content = readFileToString(mapPath);
     if (content.empty()) {
       setError(outError, "failed to read map file: " + path);
       return false;
@@ -299,7 +300,7 @@ namespace lve::tilemap {
         if (ts.HasMember("imagewidth") && ts["imagewidth"].IsInt()) tileset.imageWidth = ts["imagewidth"].GetInt();
         if (ts.HasMember("imageheight") && ts["imageheight"].IsInt()) tileset.imageHeight = ts["imageheight"].GetInt();
         if (!tileset.source.empty()) {
-          std::filesystem::path tsxPath = tileset.source;
+          std::filesystem::path tsxPath = pathutil::fromUtf8(tileset.source);
           if (tsxPath.is_relative()) {
             tsxPath = mapDir / tsxPath;
           }

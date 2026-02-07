@@ -1,4 +1,5 @@
 #include "Engine/engine_loop.hpp"
+#include "Engine/path_utils.hpp"
 
 // std
 #include <chrono>
@@ -66,7 +67,7 @@ namespace {
     std::cout.setf(std::ios::unitbuf);
     std::cerr.setf(std::ios::unitbuf);
 
-    outLogPath = logPath.string();
+    outLogPath = lve::pathutil::toUtf8(logPath);
     std::cout << "[Log] Started: " << outLogPath << '\n';
     return logFile;
   }

@@ -1,6 +1,8 @@
 #include "scene.hpp"
+#include "Engine/path_utils.hpp"
 
 // std
+#include <filesystem>
 #include <fstream>
 #include <regex>
 #include <sstream>
@@ -58,7 +60,7 @@ namespace lve {
       return LightKind::Point;
     }
 
-    std::string readFileToString(const std::string &path) {
+    std::string readFileToString(const std::filesystem::path &path) {
       std::ifstream file(path, std::ios::in | std::ios::binary);
       if (!file) return {};
       std::ostringstream ss;
@@ -66,7 +68,7 @@ namespace lve {
       return ss.str();
     }
 
-    bool writeStringToFile(const std::string &path, const std::string &data) {
+    bool writeStringToFile(const std::filesystem::path &path, const std::string &data) {
       std::ofstream file(path, std::ios::out | std::ios::binary | std::ios::trunc);
       if (!file) return false;
       file << data;
@@ -280,11 +282,11 @@ namespace lve {
     }
     ss << indent(1) << "]\n";
     ss << "}\n";
-    return writeStringToFile(path, ss.str());
+    return writeStringToFile(pathutil::fromUtf8(path), ss.str());
   }
 
   bool SceneSerializer::loadFromFile(const std::string &path, Scene &outScene) {
-    const std::string content = readFileToString(path);
+    const std::string content = readFileToString(pathutil::fromUtf8(path));
     if (content.empty()) return false;
 
     outScene.version = parseInt(content, "version", 1);

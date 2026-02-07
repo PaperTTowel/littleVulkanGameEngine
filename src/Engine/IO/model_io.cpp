@@ -1,4 +1,5 @@
 #include "Engine/IO/model_io.hpp"
+#include "Engine/path_utils.hpp"
 
 #include "utils/utils.hpp"
 
@@ -48,11 +49,11 @@ namespace lve {
       if (relative.empty()) {
         return {};
       }
-      std::filesystem::path path{relative};
+      std::filesystem::path path{pathutil::fromUtf8(relative)};
       if (path.is_relative()) {
         path = baseDir / path;
       }
-      return path.generic_string();
+      return pathutil::toGenericUtf8(path);
     }
 
     backend::ModelTextureSource loadEmbeddedTexture(const aiScene *scene, int index) {
